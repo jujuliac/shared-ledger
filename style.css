@@ -144,7 +144,11 @@ input, textarea { font: inherit; color: var(--text); }
 
 .categories { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px 0; }
 .category { min-height: 58px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; border: 1px solid transparent; }
-.category .glyph { font-size: 18px; }
+.glyph {
+  display: inline-block; width: 20px; height: 20px; background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat;
+}
+.round { display: grid; place-items: center; color: var(--text-soft); }
 
 .summary { font-size: 13px; color: var(--tertiary); padding: 10px 0 4px; }
 .summary.error { color: var(--negative); }

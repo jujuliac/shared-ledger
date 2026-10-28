@@ -17,16 +17,16 @@ const db = sample ? null : createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
 });
 
 const CATEGORIES = {
-  dining: { title: '餐飲', glyph: '🍽', color: '#FF9F43', subs: ['晚餐', '午餐', '早餐', '飲料', '點心', '宵夜'] },
-  grocery: { title: '食材日用', glyph: '🛒', color: '#6FD6A8', subs: ['家用品', 'PX', '市場', '食品'] },
-  bill: { title: '帳單', glyph: '🧾', color: '#C9CDDB', subs: ['網路', '電費', '水費', '瓦斯'] },
-  household: { title: '居家', glyph: '🏠', color: '#8FB2FF', subs: [] },
-  transport: { title: '交通', glyph: '🚃', color: '#5CD6FF', subs: ['Taxi', '停車', '高鐵'] },
-  entertainment: { title: '娛樂', glyph: '🎮', color: '#F78CFF', subs: [] },
-  shopping: { title: '購物', glyph: '🛍', color: '#B69CFF', subs: [] },
-  other: { title: '其他', glyph: '⋯', color: '#8D93A6', subs: [] },
-  transfer: { title: '結清', glyph: '⇄', color: '#C8F55A', subs: [] },
-  income: { title: '收入', glyph: '＄', color: '#C8F55A', subs: [] },
+  dining: { title: '餐飲', icon: 'utensils', color: '#FF9F43', subs: ['晚餐', '午餐', '早餐', '飲料', '點心', '宵夜'] },
+  grocery: { title: '食材日用', icon: 'shopping-cart', color: '#6FD6A8', subs: ['家用品', 'PX', '市場', '食品'] },
+  bill: { title: '帳單', icon: 'receipt', color: '#C9CDDB', subs: ['網路', '電費', '水費', '瓦斯'] },
+  household: { title: '居家', icon: 'house', color: '#8FB2FF', subs: [] },
+  transport: { title: '交通', icon: 'tram-front', color: '#5CD6FF', subs: ['Taxi', '停車', '高鐵'] },
+  entertainment: { title: '娛樂', icon: 'gamepad-2', color: '#F78CFF', subs: [] },
+  shopping: { title: '購物', icon: 'shopping-bag', color: '#B69CFF', subs: [] },
+  other: { title: '其他', icon: 'ellipsis', color: '#8D93A6', subs: [] },
+  transfer: { title: '結清', icon: 'arrow-left-right', color: '#C8F55A', subs: [] },
+  income: { title: '收入', icon: 'banknote', color: '#C8F55A', subs: [] },
 };
 const PICKABLE = ['dining', 'grocery', 'bill', 'household', 'transport', 'entertainment', 'shopping', 'other'];
 
@@ -81,6 +81,11 @@ function dayLabel(day) {
   const y = new Date(now + 'T00:00:00Z'); y.setUTCDate(y.getUTCDate() - 1);
   if (day === y.toISOString().slice(0, 10)) return { word: '昨天', short };
   return { word: null, short };
+}
+
+// Icons from Lucide (icons/, ISC licence), drawn in the current text colour
+function glyph(name) {
+  return `<span class="glyph" style="--icon:url(icons/${name}.svg)" aria-hidden="true"></span>`;
 }
 
 function escape(text) {
@@ -257,7 +262,7 @@ function render() {
         <span class="sep"></span>
         <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>›</button>
       </div>
-      <button class="round" data-action="menu" aria-label="帳號">👤</button>
+      <button class="round" data-action="menu" aria-label="帳號">${glyph('user')}</button>
     </header>
 
     <section class="card balance">
@@ -304,7 +309,7 @@ function row(e) {
   const showShare = e.kind === 'expense' && splitOf(e).division !== 'equal';
   return `
     <button class="row" data-action="open" data-id="${e.id}">
-      <span class="icon" style="background:${c.color}14;border:1px solid ${c.color}29;color:${c.color}">${c.glyph}</span>
+      <span class="icon" style="background:${c.color}14;border:1px solid ${c.color}29;color:${c.color}">${glyph(c.icon)}</span>
       <span class="main">
         <div class="title">${escape(e.name || c.title)}</div>
         <div class="detail">${escape(detailOf(e))}</div>
@@ -375,7 +380,7 @@ function renderEntry() {
         ${PICKABLE.map(key => {
           const c = CATEGORIES[key], on = d.category === key;
           return `<button class="category" data-action="category" data-value="${key}" style="background:${on ? c.color : c.color + '14'};color:${on ? '#020204' : c.color}">
-            <span class="glyph">${c.glyph}</span>${c.title}</button>`;
+            ${glyph(c.icon)}${c.title}</button>`;
         }).join('')}
       </div>
 
