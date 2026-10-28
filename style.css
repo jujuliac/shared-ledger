@@ -415,3 +415,7 @@ html[data-motion="month-prev"] { --from: -40px; --to: 40px; }
 .fab .glyph { width: 28px; height: 28px; }
 button.form-row, .date-button, .split-chip { padding-left: 0; padding-right: 0; }
 .split-chip { padding: 0 14px; }
+/* Narrow phones: the balance stays on one line and 結清 never wraps */
+.balance > div:first-child { min-width: 0; }
+.balance .amount { white-space: nowrap; font-size: clamp(26px, 8.4vw, 34px); }
+.grey-button { white-space: nowrap; flex: none; }
