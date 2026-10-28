@@ -69,7 +69,9 @@ input, textarea { font: inherit; color: var(--text); }
 .balance .spacer { flex: 1; }
 .grey-button { height: 36px; padding: 0 16px; border-radius: 999px; background: var(--chip); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-soft); font-weight: 500; font-size: 15px; }
 
-.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 8px; }
+.tile.link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 14px; font-size: 13px; color: var(--text-soft); }
+.tile.link .glyph { color: var(--accent); }
 .tile { padding: 10px 12px; border-radius: 16px; }
 .tile .label { font-size: 12px; color: var(--secondary); }
 .tile .value { font-size: 15px; font-weight: 600; margin-top: 2px; }
@@ -160,3 +162,19 @@ input, textarea { font: inherit; color: var(--text); }
 .menu button.danger { color: var(--negative); }
 
 .toast { position: fixed; top: calc(env(safe-area-inset-top) + 10px); left: 50%; transform: translateX(-50%); z-index: 20; background: #1b1e29; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; padding: 10px 18px; font-size: 15px; font-weight: 600; animation: fade 0.2s; }
+
+/* 共用分類 */
+.topbar { display: flex; align-items: center; gap: 8px; min-height: 52px; }
+.topbar h1 { flex: 1; margin: 0; text-align: center; font-size: 17px; font-weight: 600; }
+.segment { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 16px; padding: 4px; background: var(--chip); border-radius: 999px; }
+.segment button { height: 36px; border-radius: 999px; font-size: 15px; color: var(--text-soft); }
+.segment button.on { background: rgba(255, 255, 255, 0.16); color: #fff; font-weight: 600; }
+.donut { position: relative; width: 220px; margin: 20px auto; }
+.donut svg { display: block; width: 100%; }
+.donut .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.donut .value { font-size: 28px; font-weight: 600; }
+.donut .label { font-size: 13px; color: var(--secondary); margin-top: 2px; }
+.row .count { font-size: 13px; color: var(--secondary); margin-left: 6px; }
+.row .pct { font-size: 13px; color: var(--secondary); }
+.row .chevron { color: var(--tertiary); display: grid; }
+.row .chevron .glyph { width: 14px; height: 14px; }

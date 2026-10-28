@@ -39,6 +39,10 @@ const state = {
   month: monthKey(today()),
   offline: false,
   menuOpen: false,
+  view: 'list', // list | stats | category
+  basis: 'total', // 統計 counts the whole amount or my share
+  statsCategory: null,
+  byAmount: false,
 };
 
 // ---------- Money and dates ----------
@@ -238,6 +242,9 @@ function render() {
     return;
   }
 
+  if (state.view === 'stats') { renderStats(); return; }
+  if (state.view === 'category') { renderCategory(); return; }
+
   const key = state.month;
   const [year, month] = key.split('-').map(Number);
   const isCurrent = key === monthKey(today());
@@ -277,6 +284,7 @@ function render() {
     <section class="tiles">
       <div class="card tile"><div class="label">本月共用</div><div class="value num">${money(spending.reduce((s, e) => s + e.amount_cents, 0))}</div></div>
       <div class="card tile"><div class="label">我的份</div><div class="value num">${money(spending.reduce((s, e) => s + share(e, state.me), 0))}</div></div>
+      <button class="card tile link" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}<span>分類</span></button>
     </section>
 
     ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
@@ -292,6 +300,117 @@ function render() {
       </div>` : ''}`;
 }
 
+// ---------- 共用分類 ----------
+
+function monthSwitcher() {
+  const [year, month] = state.month.split('-').map(Number);
+  const isCurrent = state.month === monthKey(today());
+  return `
+    <div class="header">
+      <div><div class="year">${year}</div><div class="month">${month}月</div></div>
+      <div class="spacer"></div>
+      <div class="pill">
+        <button data-action="prevMonth" aria-label="上個月">‹</button>
+        <span class="sep"></span>
+        <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>›</button>
+      </div>
+    </div>`;
+}
+
+function topBar(title, trailing = '<span style="width:44px"></span>') {
+  return `
+    <div class="topbar">
+      <button class="round" data-action="back" aria-label="返回">${glyph('chevron-left')}</button>
+      <h1>${escape(title)}</h1>
+      ${trailing}
+    </div>`;
+}
+
+const amountOf = e => (state.basis === 'total' ? e.amount_cents : share(e, state.me));
+
+function categoryTotals() {
+  const totals = new Map();
+  for (const e of state.entries) {
+    if (e.kind !== 'expense' || !e.date.startsWith(state.month)) continue;
+    const t = totals.get(e.category) ?? { key: e.category, cents: 0, count: 0 };
+    t.cents += amountOf(e); t.count += 1;
+    totals.set(e.category, t);
+  }
+  return [...totals.values()].filter(t => t.cents > 0).sort((a, b) => b.cents - a.cents);
+}
+
+// A thin ring with rounded segments, like the app's donut
+function donut(totals, sum) {
+  const r = 80, length = 2 * Math.PI * r, gap = totals.length > 1 ? 22 : 0;
+  let start = 0;
+  const arcs = totals.map(t => {
+    const part = (t.cents / sum) * length;
+    const arc = `<circle r="${r}" cx="100" cy="100" fill="none" stroke="${CATEGORIES[t.key]?.color ?? '#8D93A6'}" stroke-width="18"
+      stroke-linecap="round" stroke-dasharray="${Math.max(part - gap, 0.5)} ${length}" stroke-dashoffset="${-(start + gap / 2)}"
+      transform="rotate(-90 100 100)"/>`;
+    start += part;
+    return arc;
+  }).join('');
+  return `<svg viewBox="0 0 200 200" aria-hidden="true">
+    <circle r="${r}" cx="100" cy="100" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="18"/>${arcs}</svg>`;
+}
+
+function renderStats() {
+  const totals = categoryTotals(), sum = totals.reduce((s, t) => s + t.cents, 0);
+  const count = totals.reduce((s, t) => s + t.count, 0);
+  const segment = (value, text) => `<button class="${state.basis === value ? 'on' : ''}" data-action="basis" data-value="${value}">${text}</button>`;
+  app.innerHTML = `
+    ${topBar('共用分類')}
+    ${monthSwitcher()}
+    <div class="segment">${segment('total', '總額')}${segment('mine', '我的份')}</div>
+    ${totals.length === 0 ? '<p class="empty">這個月沒有共用支出</p>' : `
+      <div class="donut">
+        ${donut(totals, sum)}
+        <div class="center"><div class="value num">${money(sum)}</div>
+          <div class="label">${state.basis === 'total' ? `共用 ${count} 筆` : '我的份'}</div></div>
+      </div>
+      <div class="card rows">
+        ${totals.map(t => {
+          const c = CATEGORIES[t.key] ?? CATEGORIES.other;
+          return `<button class="row" data-action="statsCategory" data-value="${t.key}">
+            <span class="icon" style="background:${c.color}14;border:1px solid ${c.color}29;color:${c.color}">${glyph(c.icon)}</span>
+            <span class="main"><div class="title">${c.title} <span class="count">${t.count} 筆</span></div></span>
+            <span class="pct num">${Math.round((t.cents / sum) * 100)}%</span>
+            <span class="total num">${money(t.cents)}</span>
+            <span class="chevron">${glyph('chevron-right')}</span>
+          </button>`;
+        }).join('')}
+      </div>`}`;
+}
+
+function renderCategory() {
+  const c = CATEGORIES[state.statsCategory] ?? CATEGORIES.other;
+  const month = Number(state.month.slice(5));
+  const rows = state.entries
+    .filter(e => e.kind === 'expense' && e.category === state.statsCategory && e.date.startsWith(state.month))
+    .sort((a, b) => (state.byAmount ? amountOf(b) - amountOf(a) : a.date < b.date ? 1 : -1));
+  const total = rows.reduce((s, e) => s + e.amount_cents, 0), mine = rows.reduce((s, e) => s + share(e, state.me), 0);
+  app.innerHTML = `
+    ${topBar(`${c.title} · ${month}月`, `<button class="grey-button" data-action="sort">${state.byAmount ? '金額排序' : '日期排序'}</button>`)}
+    <div class="day-head"><span class="date num">${rows.length} 筆 · 總額 ${money(total)}</span>
+      <span class="spacer"></span><span class="mine num">我的份 ${money(mine)}</span></div>
+    <div class="card rows">${rows.map(e => row(e, true)).join('')}</div>`;
+}
+
+function go(view) {
+  state.view = view;
+  history.pushState({ view, statsCategory: state.statsCategory }, '');
+  render();
+  scrollTo(0, 0);
+}
+
+// The phone's back gesture and the browser's back button step back a page
+window.addEventListener('popstate', event => {
+  state.view = event.state?.view ?? 'list';
+  state.statsCategory = event.state?.statsCategory ?? null;
+  render();
+});
+
 function dayBlock(day, rows) {
   const { word, short } = dayLabel(day);
   const mine = rows.filter(e => e.kind === 'expense').reduce((s, e) => s + share(e, state.me), 0);
@@ -301,18 +420,19 @@ function dayBlock(day, rows) {
       <span class="spacer"></span>
       ${mine > 0 ? `<span class="mine num">我的份 ${money(mine)}</span>` : ''}
     </div>
-    <div class="card rows">${rows.map(row).join('')}</div>`;
+    <div class="card rows">${rows.map(e => row(e)).join('')}</div>`;
 }
 
-function row(e) {
+function row(e, withDate = false) {
   const c = CATEGORIES[e.category] ?? CATEGORIES.other;
+  const [, m, d] = e.date.split('-').map(Number);
   const showShare = e.kind === 'expense' && splitOf(e).division !== 'equal';
   return `
     <button class="row" data-action="open" data-id="${e.id}">
       <span class="icon" style="background:${c.color}14;border:1px solid ${c.color}29;color:${c.color}">${glyph(c.icon)}</span>
       <span class="main">
         <div class="title">${escape(e.name || c.title)}</div>
-        <div class="detail">${escape(detailOf(e))}</div>
+        <div class="detail">${escape((withDate ? `${m}/${d} · ` : '') + detailOf(e))}</div>
       </span>
       <span class="right">
         <div class="total num">${money(e.amount_cents)}</div>
@@ -541,6 +661,11 @@ document.addEventListener('click', async event => {
     case 'prevMonth': state.month = shiftMonth(state.month, -1); render(); break;
     case 'nextMonth': state.month = shiftMonth(state.month, 1); render(); break;
     case 'add': openEntry(null); break;
+    case 'stats': state.basis = 'total'; go('stats'); break;
+    case 'basis': state.basis = target.dataset.value; render(); break;
+    case 'statsCategory': state.statsCategory = target.dataset.value; go('category'); break;
+    case 'sort': state.byAmount = !state.byAmount; render(); break;
+    case 'back': history.back(); break;
     case 'open': openEntry(state.entries.find(e => e.id === target.dataset.id)); break;
     case 'settle': openSettle(null); break;
     case 'close': closeSheet(); break;
