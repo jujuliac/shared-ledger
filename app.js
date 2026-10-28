@@ -43,6 +43,7 @@ const state = {
   basis: 'total', // 統計 counts the whole amount or my share
   statsCategory: null,
   byAmount: false,
+  flashId: null, // the record just saved, which glows once in the list
 };
 
 // ---------- Money and dates ----------
@@ -221,14 +222,76 @@ function putAmounts(row, a) {
 const app = document.getElementById('app');
 const sheetRoot = document.getElementById('sheet-root');
 
+// ---------- Motion ----------
+
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const wait = ms => new Promise(resolve => setTimeout(resolve, reduceMotion.matches ? 0 : ms));
+
+// Page and month changes slide like the app's; the kind picks the CSS in
+// style.css (push, pop, month-next, month-prev). Without View Transitions
+// (older iOS) the page just changes.
+function animate(kind, update) {
+  if (reduceMotion.matches || !document.startViewTransition) { update(); return; }
+  document.documentElement.dataset.motion = kind;
+  const t = document.startViewTransition(update);
+  t.finished.finally(() => { delete document.documentElement.dataset.motion; });
+}
+
+// Opened from the home screen it is a full-screen app; in Safari it's a page
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function remembered(key) { try { return localStorage.getItem(key) === '1'; } catch { return false; } }
+function remember(key) { try { localStorage.setItem(key, '1'); } catch { /* private mode */ } }
+
+function installHint() {
+  if (standalone || !iOS || remembered('hideInstallHint')) return '';
+  return `
+    <div class="card install">
+      <span class="icon">${glyph('square-plus')}</span>
+      <div class="main">
+        <div class="title">加到主畫面，用起來就像 App</div>
+        <div class="detail">點 Safari 的 ${glyph('share')} 分享 → 加入主畫面，之後從主畫面的圖示打開。</div>
+      </div>
+      <button class="text-button" data-action="hideHint" aria-label="不再顯示">${glyph('circle-x')}</button>
+    </div>`;
+}
+
+// The balance counts to its new figure instead of jumping
+let shownBalance = null;
+function tweenBalance(b) {
+  const el = app.querySelector('.balance .amount');
+  const from = shownBalance;
+  shownBalance = b;
+  if (!el || from === null || from === b || reduceMotion.matches) return;
+  const start = performance.now();
+  const step = now => {
+    const t = Math.min((now - start) / 550, 1), eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = `NT$ ${money(Math.abs(Math.round(from + (b - from) * eased)))}`;
+    if (t < 1 && el.isConnected) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// The header gets its frosted background once the page scrolls under it
+addEventListener('scroll', () => {
+  document.body.classList.toggle('scrolled', scrollY > 4);
+}, { passive: true });
+
+// iOS only shows :active press states when the page listens for touches
+document.addEventListener('touchstart', () => {}, { passive: true });
+
 function render() {
   if (state.status === 'loading') { app.innerHTML = '<p class="empty">載入中…</p>'; return; }
   if (state.status === 'signedOut') {
     app.innerHTML = `
       <section class="login">
+        <img class="app-icon" src="icon-192.png" alt="">
         <h1>共用支出</h1>
         <p>用綁定共用帳的 Google 帳號登入。<br>登入一次之後會記住。</p>
+        ${!standalone && iOS ? '<p class="tertiary">先加到主畫面再登入：主畫面的 App 跟 Safari 分開記登入。</p>' : ''}
         <button class="primary" data-action="google">用 Google 登入</button>
+        ${installHint()}
       </section>`;
     return;
   }
@@ -258,46 +321,51 @@ function render() {
   for (const e of monthEntries) { if (!days.has(e.date)) days.set(e.date, []); days.get(e.date).push(e); }
 
   app.innerHTML = `
-    <header class="header">
+    <header class="header sticky">
       <div>
         <div class="year">${year}</div>
         <div class="month">${month}月</div>
       </div>
       <div class="spacer"></div>
       <div class="pill">
-        <button data-action="prevMonth" aria-label="上個月">‹</button>
+        <button data-action="prevMonth" aria-label="上個月">${glyph('chevron-left')}</button>
         <span class="sep"></span>
-        <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>›</button>
+        <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>${glyph('chevron-right')}</button>
       </div>
-      <button class="round" data-action="menu" aria-label="帳號">${glyph('user')}</button>
+      <button class="round" data-action="menu" aria-label="帳號" aria-expanded="${state.menuOpen}">${glyph('circle-user')}</button>
     </header>
 
     <section class="card balance">
       <div>
         <div class="label">${escape(label)}</div>
-        <div class="amount num ${b < 0 ? 'owe' : ''}">NT$ ${money(Math.abs(b))}</div>
+        <div class="amount num ${b < 0 ? 'owe' : ''}">NT$ ${money(Math.abs(shownBalance ?? b))}</div>
       </div>
       <div class="spacer"></div>
       ${b !== 0 ? '<button class="grey-button" data-action="settle">結清</button>' : ''}
     </section>
 
-    <section class="tiles">
-      <div class="card tile"><div class="label">本月共用</div><div class="value num">${money(spending.reduce((s, e) => s + e.amount_cents, 0))}</div></div>
-      <div class="card tile"><div class="label">我的份</div><div class="value num">${money(spending.reduce((s, e) => s + share(e, state.me), 0))}</div></div>
-      <button class="card tile link" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}<span>分類</span></button>
-    </section>
+    <div class="month-body">
+      <section class="tiles">
+        <div class="card tile"><div class="label">本月共用</div><div class="value num">${money(spending.reduce((s, e) => s + e.amount_cents, 0))}</div></div>
+        <div class="card tile"><div class="label">我的份</div><div class="value num">${money(spending.reduce((s, e) => s + share(e, state.me), 0))}</div></div>
+        <button class="card tile link" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}<span>分類</span></button>
+      </section>
 
-    ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
-    ${days.size === 0 ? '<p class="empty">這個月還沒有共用支出</p>' : ''}
-    ${[...days.entries()].map(([day, rows]) => dayBlock(day, rows)).join('')}
+      ${installHint()}
+      ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
+      ${days.size === 0 ? '<p class="empty">這個月還沒有共用支出</p>' : ''}
+      ${[...days.entries()].map(([day, rows]) => dayBlock(day, rows)).join('')}
+    </div>
 
-    <button class="fab" data-action="add" aria-label="新增共用支出">＋</button>
+    <button class="fab" data-action="add" aria-label="新增共用支出">${glyph('plus')}</button>
     ${state.menuOpen ? `
       <div class="menu" role="menu">
         <div class="who">${escape(state.email ?? '')}</div>
         <button data-action="refresh">重新整理</button>
         <button class="danger" data-action="signOut">登出</button>
       </div>` : ''}`;
+  tweenBalance(b);
+  state.flashId = null;
 }
 
 // ---------- 共用分類 ----------
@@ -310,16 +378,16 @@ function monthSwitcher() {
       <div><div class="year">${year}</div><div class="month">${month}月</div></div>
       <div class="spacer"></div>
       <div class="pill">
-        <button data-action="prevMonth" aria-label="上個月">‹</button>
+        <button data-action="prevMonth" aria-label="上個月">${glyph('chevron-left')}</button>
         <span class="sep"></span>
-        <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>›</button>
+        <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>${glyph('chevron-right')}</button>
       </div>
     </div>`;
 }
 
 function topBar(title, trailing = '<span style="width:44px"></span>') {
   return `
-    <div class="topbar">
+    <div class="topbar sticky">
       <button class="round" data-action="back" aria-label="返回">${glyph('chevron-left')}</button>
       <h1>${escape(title)}</h1>
       ${trailing}
@@ -343,11 +411,12 @@ function categoryTotals() {
 function donut(totals, sum) {
   const r = 80, length = 2 * Math.PI * r, gap = totals.length > 1 ? 22 : 0;
   let start = 0;
-  const arcs = totals.map(t => {
+  // Each arc draws in after the one before it
+  const arcs = totals.map((t, i) => {
     const part = (t.cents / sum) * length;
     const arc = `<circle r="${r}" cx="100" cy="100" fill="none" stroke="${CATEGORIES[t.key]?.color ?? '#8D93A6'}" stroke-width="18"
       stroke-linecap="round" stroke-dasharray="${Math.max(part - gap, 0.5)} ${length}" stroke-dashoffset="${-(start + gap / 2)}"
-      transform="rotate(-90 100 100)"/>`;
+      transform="rotate(-90 100 100)" style="animation-delay:${i * 60}ms"/>`;
     start += part;
     return arc;
   }).join('');
@@ -362,7 +431,8 @@ function renderStats() {
   app.innerHTML = `
     ${topBar('共用分類')}
     ${monthSwitcher()}
-    <div class="segment">${segment('total', '總額')}${segment('mine', '我的份')}</div>
+    <div class="segment" data-on="${state.basis}">${segment('total', '總額')}${segment('mine', '我的份')}</div>
+    <div class="month-body">
     ${totals.length === 0 ? '<p class="empty">這個月沒有共用支出</p>' : `
       <div class="donut">
         ${donut(totals, sum)}
@@ -380,7 +450,8 @@ function renderStats() {
             <span class="chevron">${glyph('chevron-right')}</span>
           </button>`;
         }).join('')}
-      </div>`}`;
+      </div>`}
+    </div>`;
 }
 
 function renderCategory() {
@@ -397,18 +468,60 @@ function renderCategory() {
     <div class="card rows">${rows.map(e => row(e, true)).join('')}</div>`;
 }
 
+// Pages push in from the right and go back to the right, like the app's
+// navigation. Where each page was scrolled to is kept for coming back.
+const scrollOf = {};
 function go(view) {
-  state.view = view;
-  history.pushState({ view, statsCategory: state.statsCategory }, '');
-  render();
-  scrollTo(0, 0);
+  scrollOf[state.view] = scrollY;
+  animate('push', () => {
+    state.view = view;
+    history.pushState({ view, statsCategory: state.statsCategory }, '');
+    render();
+    scrollTo(0, 0);
+  });
 }
 
-// The phone's back gesture and the browser's back button step back a page
+// The ‹ button and the browser's back button step back a page. Safari's own
+// swipe-back already slides, so only ‹ (and the edge swipe below) animate.
+let backByButton = false;
 window.addEventListener('popstate', event => {
-  state.view = event.state?.view ?? 'list';
-  state.statsCategory = event.state?.statsCategory ?? null;
-  render();
+  const update = () => {
+    state.view = event.state?.view ?? 'list';
+    state.statsCategory = event.state?.statsCategory ?? null;
+    render();
+    scrollTo(0, scrollOf[state.view] ?? 0);
+  };
+  if (backByButton) animate('pop', update); else update();
+  backByButton = false;
+});
+
+// From the home screen there is no browser to swipe back with, so the left
+// edge does it: the page follows the finger and goes back past a third
+let edge = null;
+document.addEventListener('touchstart', event => {
+  const touch = event.touches[0];
+  if (!standalone || state.view === 'list' || draft || settle || touch.clientX > 24) return;
+  edge = { x: touch.clientX, y: touch.clientY, dx: 0, t: performance.now(), on: false };
+}, { passive: true });
+document.addEventListener('touchmove', event => {
+  if (!edge) return;
+  const touch = event.touches[0];
+  edge.dx = Math.max(0, touch.clientX - edge.x);
+  if (!edge.on && Math.abs(touch.clientY - edge.y) > edge.dx) { edge = null; return; }
+  edge.on = edge.dx > 6;
+  if (edge.on) app.style.transform = `translateX(${edge.dx}px)`;
+}, { passive: true });
+document.addEventListener('touchend', () => {
+  if (!edge?.on) { edge = null; return; }
+  const fast = edge.dx / (performance.now() - edge.t) > 0.5;
+  const back = edge.dx > innerWidth / 3 || fast;
+  edge = null;
+  app.style.transition = 'transform 0.3s var(--ease)';
+  app.style.transform = back ? 'translateX(100%)' : '';
+  setTimeout(() => {
+    app.style.transition = '';
+    if (back) { history.back(); requestAnimationFrame(() => { app.style.transform = ''; }); }
+  }, reduceMotion.matches ? 0 : 300);
 });
 
 function dayBlock(day, rows) {
@@ -423,11 +536,15 @@ function dayBlock(day, rows) {
     <div class="card rows">${rows.map(e => row(e)).join('')}</div>`;
 }
 
+// A record; swipe it left for 刪除, like the app's list
 function row(e, withDate = false) {
   const c = CATEGORIES[e.category] ?? CATEGORIES.other;
   const [, m, d] = e.date.split('-').map(Number);
   const showShare = e.kind === 'expense' && splitOf(e).division !== 'equal';
+  const deletable = e.kind !== 'income';
   return `
+    <div class="swipe ${state.flashId === e.id ? 'flash' : ''}" ${deletable ? `data-swipe="${e.id}"` : ''}>
+    ${deletable ? `<button class="swipe-delete" data-action="swipeDelete" data-id="${e.id}" tabindex="-1">${glyph('trash-2')}<span>刪除</span></button>` : ''}
     <button class="row" data-action="open" data-id="${e.id}">
       <span class="icon" style="background:${c.color}14;border:1px solid ${c.color}29;color:${c.color}">${glyph(c.icon)}</span>
       <span class="main">
@@ -438,106 +555,398 @@ function row(e, withDate = false) {
         <div class="total num">${money(e.amount_cents)}</div>
         ${showShare ? `<div class="share num">我的份 ${money(share(e, state.me))}</div>` : ''}
       </span>
-    </button>`;
+    </button>
+    </div>`;
 }
 
-// ---------- Entry sheet ----------
+// ---------- Keypad ----------
 
-let draft = null;
+// The entry screen's calculator, like Calculator in the app: what was typed
+// as numbers and operators, worked out on = or 儲存. A suggested amount
+// (last time's) shows highlighted and the next digit replaces it.
+const OPS = { '+': (a, b) => a + b, '−': (a, b) => a - b, '×': (a, b) => a * b, '÷': (a, b) => a / b };
+const calcOf = (text = '', preselected = false) => ({ numbers: [text], ops: [], preselected });
+const calcEmpty = c => c.numbers.length === 1 && c.numbers[0] === '';
+
+function calcKey(c, key) {
+  const last = c.numbers.length - 1, current = c.numbers[last];
+  if (key in OPS) {
+    c.preselected = false;
+    if (current === '' && c.ops.length) c.ops[c.ops.length - 1] = key;
+    else if (current !== '') { c.ops.push(key); c.numbers.push(''); }
+  } else if (key === 'back') {
+    c.preselected = false;
+    if (current) c.numbers[last] = current.slice(0, -1);
+    else if (c.ops.length) { c.ops.pop(); c.numbers.pop(); }
+  } else if (key === 'clear') {
+    Object.assign(c, calcOf());
+  } else if (key === '=') {
+    const value = calcValue(c);
+    if (value != null && value >= 0) Object.assign(c, calcOf(typed(value)));
+  } else {
+    if (c.preselected) Object.assign(c, calcOf());
+    for (const d of key === '00' ? ['0', '0'] : [key]) {
+      let n = c.numbers[c.numbers.length - 1];
+      if (d === '.') { if (n.includes('.')) continue; n = (n || '0') + '.'; }
+      else if (/\.\d\d$/.test(n) || n.replace('.', '').length >= 9) continue;
+      else n = n === '0' ? d : n + d;
+      c.numbers[c.numbers.length - 1] = n;
+    }
+  }
+}
+
+// In cents, × and ÷ before + and −; a trailing operator is left out
+function calcValue(c) {
+  const values = c.numbers.map(n => (n === '' || n === '.' ? null : parseFloat(n)));
+  const ops = [...c.ops];
+  if (values.length > 1 && values[values.length - 1] == null) { values.pop(); ops.pop(); }
+  if (values.some(v => v == null)) return null;
+  const terms = [values[0]], joins = [];
+  ops.forEach((op, i) => {
+    if (op === '×' || op === '÷') terms.push(OPS[op](terms.pop(), values[i + 1]));
+    else { joins.push(op); terms.push(values[i + 1]); }
+  });
+  const result = joins.reduce((sum, op, i) => OPS[op](sum, terms[i + 1]), terms[0]);
+  return Number.isFinite(result) ? Math.round(result * 100) : null;
+}
+
+const grouped = n => {
+  const [whole, fraction] = n.split('.');
+  return Number(whole || 0).toLocaleString('en-US') + (fraction !== undefined ? '.' + fraction : '');
+};
+
+// The big number: what is being typed, or the running total right after an operator
+function calcHeadline(c) {
+  const current = c.numbers[c.numbers.length - 1];
+  if (current === '' && c.ops.length) { const v = calcValue(c); return v == null ? '0' : money(v); }
+  return current === '' ? '0' : grouped(current);
+}
+
+const calcExpression = c => (c.ops.length
+  ? c.numbers.map((n, i) => (n === '' ? '' : grouped(n)) + (c.ops[i] ? ` ${c.ops[i]} ` : '')).join('')
+  : '');
+
+const KEYS = [
+  ['÷', '×', '−', '+'],
+  ['7', '8', '9', 'back'],
+  ['4', '5', '6', 'clear'],
+  ['1', '2', '3', '='],
+  ['.', '0', '00'],
+];
+const KEY_LOOK = { back: ['delete', '刪除'], clear: ['circle-x', '清除'], '÷': ['divide', '÷'], '×': ['x', '×'], '−': ['minus', '−'], '+': ['plus', '+'], '=': ['equal', '計算'] };
+
+function keypad() {
+  const next = missing();
+  return `
+    <div class="keypad">
+      ${KEYS.flat().map(key => {
+        const op = key in OPS || key in KEY_LOOK || key === '=';
+        const [icon, label] = KEY_LOOK[key] ?? [];
+        return `<button class="key ${op ? 'op' : ''} ${key === '0' ? 'wide' : ''}" data-action="key" data-value="${key}"
+          aria-label="${label ?? (key === '.' ? '小數點' : key)}">${icon ? glyph(icon) : key}</button>`;
+      }).join('')}
+    </div>
+    <button class="primary" data-action="keyAction" id="keyAction" ${draftTotal() > 0 ? '' : 'disabled'}>${next ? '下一步' : '儲存'}</button>`;
+}
+
+// ---------- Sheets ----------
+
+// One sheet at a time. Its frame stays while what's inside changes, so a tap
+// on a chip doesn't replay the rise; drag it down by the top to put it away.
+let closeTimer;
+function showSheet(kind, label, html) {
+  clearTimeout(closeTimer);
+  let sheet = sheetRoot.querySelector('.sheet');
+  if (!sheet || sheet.classList.contains('closing') || sheet.dataset.kind !== kind) {
+    sheetRoot.innerHTML = `
+      <div class="backdrop" data-action="close"></div>
+      <section class="sheet ${kind}" data-kind="${kind}" role="dialog" aria-modal="true">
+        <div class="grabber" aria-hidden="true"></div>
+        <div class="sheet-inner"></div>
+      </section>`;
+    sheet = sheetRoot.querySelector('.sheet');
+    dragToDismiss(sheet);
+    document.body.classList.add('sheet-open');
+  }
+  sheet.setAttribute('aria-label', label);
+  // Keep where the body and the chip rows were scrolled to
+  const body = sheet.querySelector('.sheet-body'), top = body?.scrollTop ?? 0;
+  const lefts = [...sheet.querySelectorAll('.scroll-chips')].map(el => el.scrollLeft);
+  sheet.querySelector('.sheet-inner').innerHTML = html;
+  const newBody = sheet.querySelector('.sheet-body');
+  if (newBody) newBody.scrollTop = top;
+  sheet.querySelectorAll('.scroll-chips').forEach((el, i) => { el.scrollLeft = lefts[i] ?? 0; });
+}
+
+function closeSheet() {
+  draft = null;
+  settle = null;
+  document.body.classList.remove('sheet-open');
+  const sheet = sheetRoot.querySelector('.sheet');
+  if (!sheet) return;
+  document.activeElement?.blur();
+  sheet.style.transition = '';
+  sheet.classList.add('closing');
+  sheetRoot.querySelector('.backdrop')?.classList.add('closing');
+  closeTimer = setTimeout(() => { sheetRoot.innerHTML = ''; }, reduceMotion.matches ? 0 : 300);
+}
+
+// A new record with something typed asks before it's thrown away
+function requestClose() {
+  const d = draft;
+  const typedSomething = d?.isNew && !calcEmpty(d.calc);
+  if (typedSomething && !confirm('放棄這筆共用支出？')) return false;
+  closeSheet();
+  return true;
+}
+
+function dragToDismiss(sheet) {
+  let drag = null;
+  sheet.addEventListener('pointerdown', event => {
+    const handle = event.target.closest('.grabber, .sheet-head');
+    if (!handle || event.target.closest('button, input')) return;
+    drag = { y: event.clientY, t: performance.now(), dy: 0 };
+    sheet.setPointerCapture(event.pointerId);
+    sheet.style.transition = 'none';
+  });
+  sheet.addEventListener('pointermove', event => {
+    if (!drag) return;
+    const dy = event.clientY - drag.y;
+    // Pulling up gives a little, like a rubber band
+    drag.dy = dy > 0 ? dy : -Math.sqrt(-dy) * 2;
+    sheet.style.transform = `translateY(${drag.dy}px)`;
+    const backdrop = sheetRoot.querySelector('.backdrop');
+    if (backdrop) backdrop.style.opacity = String(Math.max(0, 1 - drag.dy / 400));
+  });
+  const end = () => {
+    if (!drag) return;
+    const fast = drag.dy / (performance.now() - drag.t) > 0.6;
+    const away = drag.dy > 120 || (fast && drag.dy > 30);
+    drag = null;
+    if (away && requestClose()) return;
+    sheet.style.transition = 'transform 0.45s var(--spring)';
+    sheet.style.transform = '';
+    const backdrop = sheetRoot.querySelector('.backdrop');
+    if (backdrop) backdrop.style.opacity = '';
+  };
+  sheet.addEventListener('pointerup', end);
+  sheet.addEventListener('pointercancel', end);
+}
+
+// ---------- Entry screen ----------
+
+// The same screen as SharedEntryScreen in the app: the amount with its
+// keypad, 我付 ▾ 平分 ▾ under it, then 分類, 子分類 and 備註; pickers rise
+// in a card from the bottom. Starts as 我付・平分.
+let draft = null, shownPanel = null;
 
 function openEntry(entry) {
   if (entry?.kind === 'income') { toast('收入紀錄請在 App 裡修改'); return; }
   if (entry?.kind === 'settlement') { openSettle(entry); return; }
+  const billBear = entry?.note?.startsWith('Bill Bear 匯入');
   draft = entry ? {
-    id: entry.id, isNew: false,
-    amountText: typed(entry.amount_cents), date: entry.date,
+    id: entry.id, isNew: false, calc: calcOf(typed(entry.amount_cents)), panel: 'done', date: entry.date,
     category: entry.category, name: entry.name, addingSub: false,
-    note: entry.note?.startsWith('Bill Bear 匯入') ? '' : entry.note ?? '',
-    keepNote: entry.note?.startsWith('Bill Bear 匯入') ? entry.note : null,
+    note: billBear ? '' : entry.note ?? '', keepNote: billBear ? entry.note : null,
     ...splitOf(entry),
   } : {
-    id: crypto.randomUUID(), isNew: true,
-    amountText: '', date: today(), category: null, name: '', addingSub: false, note: '', keepNote: null,
+    id: crypto.randomUUID(), isNew: true, calc: calcOf(), panel: 'amount', date: today(),
+    category: null, name: '', addingSub: false, note: '', keepNote: null,
     payer: 'me', minePaidText: '', division: 'equal', myShareText: '',
   };
+  draft.calMonth = monthKey(draft.date);
+  shownPanel = null;
   renderEntry();
-  if (!entry) sheetRoot.querySelector('#amount')?.focus();
+}
+
+const draftTotal = () => calcValue(draft.calc) ?? 0;
+
+// What is still missing before saving, in the order it's asked for
+function missing() {
+  const d = draft;
+  if (draftTotal() <= 0) return 'amount';
+  if (!d.category) return 'category';
+  if (!amounts(draftTotal(), d)) return d.payer === 'both' ? 'payer' : 'division';
+  return null;
+}
+
+function show(panel) {
+  document.activeElement?.blur();
+  draft.addingSub = false;
+  draft.panel = panel;
+  renderEntry();
+}
+
+function shortDay(day) {
+  const { word, short } = dayLabel(day);
+  return word ?? short;
+}
+
+const payerTitle = () => ({ me: '我付', partner: `${partnerName()} 付`, both: '各付一部分' }[draft.payer]);
+const divisionTitle = () => ({ equal: '平分', allMine: '全算我', allPartners: `全算 ${partnerName()}`, custom: '自訂' }[draft.division]);
+
+function categoryIcon(key, size) {
+  const c = CATEGORIES[key] ?? CATEGORIES.other;
+  return `<span class="icon" style="width:${size}px;height:${size}px;background:${c.color}12;border:1px solid ${c.color}29;color:${c.color}">${glyph(c.icon)}</span>`;
+}
+
+function cell(action, value, picked, label, tint = 'var(--accent)') {
+  return `<button class="cell ${picked ? 'on' : ''}" data-action="${action}" data-value="${value}" style="--tint:${tint}" aria-pressed="${picked}">${label}</button>`;
+}
+
+function partField(title, field) {
+  return `<label class="part-field"><span>${title}</span>
+    <input inputmode="decimal" placeholder="NT$" value="${escape(draft[field])}" data-field="${field}" class="num"></label>`;
+}
+
+function calendar() {
+  const d = draft, [y, m] = d.calMonth.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const now = today();
+  const cells = Array.from({ length: first }, () => '<span></span>');
+  for (let day = 1; day <= days; day++) {
+    const key = `${d.calMonth}-${String(day).padStart(2, '0')}`;
+    cells.push(`<button class="day ${key === d.date ? 'on' : ''} ${key === now ? 'today' : ''}" data-action="day" data-value="${key}">${day}</button>`);
+  }
+  return `
+    <div class="calendar">
+      <div class="cal-head">
+        <span class="cal-title">${y}年${m}月</span><span class="spacer"></span>
+        <button data-action="calMonth" data-value="-1" aria-label="上個月">${glyph('chevron-left')}</button>
+        <button data-action="calMonth" data-value="1" aria-label="下個月">${glyph('chevron-right')}</button>
+      </div>
+      <div class="cal-grid">${'日一二三四五六'.split('').map(w => `<span class="weekday">${w}</span>`).join('')}${cells.join('')}</div>
+    </div>`;
+}
+
+function primaryButton() {
+  const next = missing();
+  const title = { null: '儲存', amount: '輸入金額', category: '選擇分類' }[next] ?? '填好分攤';
+  return `<button class="primary ${next ? 'pending' : ''}" data-action="primary" id="save">${title}</button>`;
+}
+
+function pickerCard() {
+  const d = draft, partner = partnerName(), a = amounts(draftTotal(), d);
+  let body;
+  if (d.panel === 'category') {
+    body = `<div class="cells two">${PICKABLE.map(key => cell('category', key, d.category === key,
+      `${categoryIcon(key, 30)}<span>${CATEGORIES[key].title}</span>`, CATEGORIES[key].color)).join('')}</div>`;
+  } else if (d.panel === 'payer') {
+    body = `<div class="picker-title">誰付的</div>
+      <div class="cells three">${cell('payer', 'me', d.payer === 'me', '我付')}${cell('payer', 'partner', d.payer === 'partner', `${escape(partner)} 付`)}${cell('payer', 'both', d.payer === 'both', '各付一部分')}</div>
+      ${d.payer === 'both' ? partField('我付了多少', 'minePaidText') : ''}`;
+  } else if (d.panel === 'division') {
+    body = `<div class="picker-title">怎麼分</div>
+      <div class="cells two">${cell('division', 'equal', d.division === 'equal', '平分')}${cell('division', 'allMine', d.division === 'allMine', '全算我')}${cell('division', 'allPartners', d.division === 'allPartners', `全算 ${escape(partner)}`)}${cell('division', 'custom', d.division === 'custom', '自訂')}</div>
+      ${d.division === 'custom' ? partField('我的份', 'myShareText') : ''}
+      <div class="picker-note num" id="divisionNote"></div>`;
+  } else {
+    body = calendar();
+  }
+  return `<div class="picker-card ${shownPanel !== d.panel ? 'enter' : ''}">${body}${d.panel !== 'category' ? primaryButton() : ''}</div>`;
 }
 
 function renderEntry() {
   const d = draft;
-  const partner = partnerName();
-  const option = (group, value, text) => `<button class="chip ${d[group] === value ? 'on' : ''}" data-action="set" data-group="${group}" data-value="${value}">${escape(text)}</button>`;
   const subs = d.category ? subcategories(d.category) : [];
   if (d.name && !subs.some(s => s.name === d.name)) subs.unshift({ name: d.name, cents: null });
+  const title = d.isNew ? '新增共用支出' : '編輯共用支出';
+  const picker = ['category', 'payer', 'division', 'date'].includes(d.panel);
+  const chip = (panel, text) => `<button class="split-chip ${d.panel === panel ? 'on' : ''}" data-action="panel" data-value="${panel}">${escape(text)}${glyph('chevron-down')}</button>`;
 
-  sheetRoot.innerHTML = `
-    <div class="backdrop" data-action="close"></div>
-    <section class="sheet" role="dialog" aria-label="${d.isNew ? '新增共用支出' : '編輯共用支出'}">
-      <div class="sheet-head">
-        <button class="text-button" data-action="close">取消</button>
-        <h2>${d.isNew ? '新增共用支出' : '編輯共用支出'}</h2>
-        ${d.isNew ? '<span style="width:44px"></span>' : '<button class="text-button danger" data-action="delete">刪除</button>'}
+  showSheet('entry', title, `
+    <div class="sheet-head entry-head">
+      <button class="circle" data-action="close" aria-label="關閉">${glyph('x')}</button>
+      <h2>${title}</h2>
+      ${d.isNew ? '<span class="circle-space"></span>' : `<button class="circle" data-action="delete" aria-label="刪除">${glyph('trash-2')}</button>`}
+    </div>
+
+    <div class="amount-block ${d.panel === 'amount' ? 'active' : ''}">
+      <div class="amount-line">
+        <span class="currency-pill">TWD</span>
+        <button class="figures" data-action="panel" data-value="amount" aria-label="金額">
+          <span class="expression num" id="expression"></span>
+          <span class="headline num" id="headline"></span>
+        </button>
       </div>
-
-      <label class="amount-input"><span>TWD</span>
-        <input id="amount" inputmode="decimal" placeholder="0" value="${escape(d.amountText)}" data-field="amountText" autocomplete="off">
-      </label>
-
-      <div class="field"><span class="name">日期</span><input type="date" value="${d.date}" max="${today()}" data-field="date"></div>
-
-      <div class="field"><span class="name">誰付</span>
-        <div class="scroll-chips">${option('payer', 'me', '我付')}${option('payer', 'partner', `${partner} 付`)}${option('payer', 'both', '各付一部分')}</div>
+      <div class="date-line">
+        <button class="date-button ${d.panel === 'date' ? 'on' : ''}" data-action="panel" data-value="date">${glyph('chevron-down')}<span class="num">${shortDay(d.date)}</span></button>
       </div>
-      ${d.payer === 'both' ? `<div class="field"><span class="name">我付了</span><input inputmode="decimal" placeholder="NT$" value="${escape(d.minePaidText)}" data-field="minePaidText"></div>` : ''}
+    </div>
 
-      <div class="field"><span class="name">怎麼分</span>
-        <div class="scroll-chips">${option('division', 'equal', '平分')}${option('division', 'allMine', '全算我')}${option('division', 'allPartners', `全算 ${partner}`)}${option('division', 'custom', '自訂')}</div>
+    <div class="form">
+      <div class="split-row">
+        ${chip('payer', payerTitle())}${chip('division', divisionTitle())}
+        <span class="spacer"></span><span class="mine num" id="myShare"></span>
       </div>
-      ${d.division === 'custom' ? `<div class="field"><span class="name">我的份</span><input inputmode="decimal" placeholder="NT$" value="${escape(d.myShareText)}" data-field="myShareText"></div>` : ''}
-
-      <div class="categories">
-        ${PICKABLE.map(key => {
-          const c = CATEGORIES[key], on = d.category === key;
-          return `<button class="category" data-action="category" data-value="${key}" style="background:${on ? c.color : c.color + '14'};color:${on ? '#020204' : c.color}">
-            ${glyph(c.icon)}${c.title}</button>`;
-        }).join('')}
-      </div>
-
-      <div class="field"><span class="name">子分類</span>
+      <div class="divider"></div>
+      <button class="form-row" data-action="panel" data-value="category">
+        <span class="row-title ${d.panel === 'category' ? 'on' : ''}">分類</span>
+        ${d.category ? `<span class="picked">${categoryIcon(d.category, 28)}${CATEGORIES[d.category].title}</span>`
+          : `<span class="prompt">選擇分類${glyph('chevron-right')}</span>`}
+      </button>
+      <div class="divider"></div>
+      <div class="form-row">
+        <span class="row-title">子分類</span>
         ${!d.category ? '<span class="tertiary">請先選分類</span>'
-          : d.addingSub ? `<input type="text" id="newSub" placeholder="輸入子分類" value="${escape(d.name)}" data-field="name">`
+          : d.addingSub ? `<input type="text" id="newSub" placeholder="輸入子分類" value="${escape(d.name)}" data-field="name" enterkeyhint="done">`
           : `<div class="scroll-chips">${subs.map(s => `<button class="chip ${s.name === d.name ? 'on' : ''}" data-action="sub" data-value="${escape(s.name)}" data-cents="${s.cents ?? ''}">${escape(s.name)}</button>`).join('')}
-              <button class="chip" data-action="addSub" aria-label="新增子分類">＋</button></div>`}
+              <button class="chip plus" data-action="addSub" aria-label="新增子分類">＋</button></div>`}
       </div>
+      <div class="divider"></div>
+      <label class="form-row">
+        <span class="row-title">備註</span>
+        <input type="text" placeholder="選填" value="${escape(d.note)}" data-field="note" enterkeyhint="done">
+      </label>
+    </div>
 
-      <div class="field"><span class="name">備註</span><input type="text" placeholder="選填" value="${escape(d.note)}" data-field="note"></div>
-
-      <div class="summary num" id="summary"></div>
-      <button class="primary" data-action="save" id="save">儲存</button>
-    </section>`;
-  updateSummary();
+    <div class="grow"></div>
+    ${picker ? '' : `<div class="bottom-panel ${shownPanel !== d.panel && shownPanel !== null ? 'enter' : ''}">
+      ${d.panel === 'amount' ? keypad() : primaryButton()}</div>`}
+    ${picker ? `<div class="picker-backdrop" data-action="panel" data-value="${missing() === 'amount' ? 'amount' : 'done'}"></div>${pickerCard()}` : ''}`);
+  shownPanel = d.panel;
+  updateAmount();
   if (d.addingSub) sheetRoot.querySelector('#newSub')?.focus();
 }
 
-function updateSummary() {
-  const d = draft, total = cents(d.amountText) ?? 0, a = amounts(total, d);
-  const el = sheetRoot.querySelector('#summary'), save = sheetRoot.querySelector('#save');
-  if (!el) return;
-  const partner = partnerName();
-  if (total > 0 && !a) { el.textContent = '填的金額超過總額了'; el.className = 'summary error'; }
-  else if (a) {
-    const effect = a.minePaid - a.myShare;
-    el.textContent = `我的份 ${money(a.myShare)} · ${partner} 的份 ${money(a.partnerShare)}` +
-      (effect > 0 ? ` · 這筆讓 ${partner} 欠你 ${money(effect)}` : effect < 0 ? ` · 這筆讓你欠 ${partner} ${money(-effect)}` : '');
-    el.className = 'summary num';
-  } else { el.textContent = ''; }
-  save.disabled = !a || !d.category;
-  save.textContent = !d.category && a ? '選擇分類' : '儲存';
+// What a key changes: the figures, 我的份 and the buttons' titles
+function updateAmount() {
+  const d = draft, total = draftTotal(), a = amounts(total, d), next = missing();
+  const q = id => sheetRoot.querySelector(id);
+  const headline = q('#headline');
+  headline.textContent = calcHeadline(d.calc);
+  headline.classList.toggle('empty', calcEmpty(d.calc));
+  headline.classList.toggle('preselected', d.calc.preselected);
+  q('#expression').textContent = calcExpression(d.calc) || ' ';
+  q('#myShare').textContent = a && total > 0 ? `我的份 ${money(a.myShare)}` : '';
+  const note = q('#divisionNote');
+  if (note) {
+    note.className = 'picker-note num' + (total > 0 && !a ? ' error' : '');
+    note.textContent = total > 0 ? (a ? `我的份 ${money(a.myShare)} · ${partnerName()} 的份 ${money(a.partnerShare)}` : '填的金額超過總額了') : '';
+  }
+  const action = q('#keyAction');
+  if (action) { action.disabled = !(total > 0); action.textContent = next ? '下一步' : '儲存'; }
+  const save = q('#save');
+  if (save) {
+    save.textContent = { null: '儲存', amount: '輸入金額', category: '選擇分類' }[next] ?? '填好分攤';
+    save.classList.toggle('pending', !!next);
+  }
+}
+
+// The keypad's button: works the sum out, then on to what's missing or saves
+async function keyAction() {
+  calcKey(draft.calc, '=');
+  const next = missing();
+  if (next) show(next); else await saveEntry();
+}
+
+async function primary() {
+  const next = missing();
+  if (next) show(next); else await saveEntry();
 }
 
 async function saveEntry() {
-  const d = draft, total = cents(d.amountText), a = amounts(total, d);
+  const d = draft, total = draftTotal(), a = amounts(total, d);
   if (!a || !d.category) return;
   const note = d.note.trim();
   const row = {
@@ -549,22 +958,50 @@ async function saveEntry() {
 }
 
 async function commit(row, isNew, message) {
-  const save = sheetRoot.querySelector('#save');
+  const save = sheetRoot.querySelector('#save, #keyAction');
+  const title = save?.textContent;
   if (save) { save.disabled = true; save.textContent = '儲存中…'; }
   try {
     await saveRow(row, isNew);
+    state.flashId = row.id;
     closeSheet();
+    if (state.view === 'list') state.month = monthKey(row.date);
     render();
     toast(message);
   } catch {
-    if (save) { save.disabled = false; save.textContent = '儲存'; }
+    if (save) { save.disabled = false; save.textContent = title; }
+    toast('連不上共用帳，剛才填的內容都還在，請確認網路後再試一次');
+  }
+}
+
+// Gone at once with a 復原 in the toast, instead of asking first
+async function removeEntry(id) {
+  const entry = state.entries.find(e => e.id === id);
+  if (!entry) return;
+  const wrap = app.querySelector(`.swipe[data-swipe="${id}"]`);
+  if (wrap) {
+    wrap.style.height = `${wrap.offsetHeight}px`;
+    wrap.getBoundingClientRect();
+    wrap.classList.add('removing');
+    await wait(240);
+  }
+  try {
+    await saveRow({ id, deleted_at: new Date().toISOString() }, false);
+    render();
+    toast('已刪除', { label: '復原', run: () => restore(entry) });
+  } catch {
+    render();
     toast('連不上共用帳，請確認網路後再試一次');
   }
 }
 
-async function deleteEntry(id) {
-  if (!confirm('刪除這筆共用支出？兩邊都會看不到這筆，餘額也會跟著變。')) return;
-  await commit({ id, deleted_at: new Date().toISOString() }, false, '已刪除');
+async function restore(entry) {
+  try {
+    await saveRow(sample ? { ...entry, deleted_at: null } : { id: entry.id, deleted_at: null }, false);
+    state.flashId = entry.id;
+    render();
+    toast('已復原');
+  } catch { toast('連不上共用帳，請確認網路後再試一次'); }
 }
 
 // ---------- Settle sheet ----------
@@ -580,24 +1017,21 @@ function openSettle(entry) {
     date: entry?.date ?? today(), note: entry?.note ?? '',
   };
   const direction = payer === state.me ? `你付給 ${partnerName()}` : `${partnerName()} 付給你`;
-  sheetRoot.innerHTML = `
-    <div class="backdrop" data-action="close"></div>
-    <section class="sheet" role="dialog" aria-label="結清">
-      <div class="sheet-head">
-        <button class="text-button" data-action="close">取消</button>
-        <h2>結清</h2>
-        ${settle.isNew ? '<span style="width:44px"></span>' : '<button class="text-button danger" data-action="delete">刪除</button>'}
-      </div>
-      <p class="secondary" style="margin:8px 4px 0">${escape(direction)}</p>
-      <label class="amount-input"><span>NT$</span>
-        <input id="settleAmount" inputmode="decimal" value="${escape(settle.amountText)}" data-settle="amountText">
-      </label>
-      <div class="field"><span class="name">日期</span><input type="date" value="${settle.date}" max="${today()}" data-settle="date"></div>
-      <div class="field"><span class="name">備註</span><input type="text" placeholder="例如：轉帳、現金" value="${escape(settle.note)}" data-settle="note"></div>
-      <div class="summary num" id="settleSummary"></div>
-      <p class="summary">確認錢真的轉過去之後再記。</p>
-      <button class="primary" data-action="saveSettle" id="save">記錄</button>
-    </section>`;
+  showSheet('settle', '結清', `
+    <div class="sheet-head">
+      <button class="text-button" data-action="close">取消</button>
+      <h2>結清</h2>
+      ${settle.isNew ? '<span style="width:44px"></span>' : '<button class="text-button danger" data-action="delete">刪除</button>'}
+    </div>
+    <p class="secondary" style="margin:8px 4px 0">${escape(direction)}</p>
+    <label class="amount-input"><span>NT$</span>
+      <input id="settleAmount" inputmode="decimal" value="${escape(settle.amountText)}" data-settle="amountText">
+    </label>
+    <div class="field"><span class="name">日期</span><input type="date" value="${settle.date}" max="${today()}" data-settle="date"></div>
+    <div class="field"><span class="name">備註</span><input type="text" placeholder="例如：轉帳、現金" value="${escape(settle.note)}" data-settle="note"></div>
+    <div class="summary num" id="settleSummary"></div>
+    <p class="summary">確認錢真的轉過去之後再記。</p>
+    <button class="primary" data-action="saveSettle" id="save">記錄</button>`);
   updateSettleSummary();
 }
 
@@ -624,23 +1058,83 @@ async function saveSettle() {
   await commit(row, settle.isNew, `已記錄結清 ${money(amount)}`);
 }
 
-function closeSheet() {
-  sheetRoot.innerHTML = '';
-  draft = null;
-  settle = null;
+// ---------- Swipe to delete ----------
+
+const DELETE_WIDTH = 88;
+let swipe = null, openSwipe = null, swipedAt = 0;
+
+function setSwipe(wrap, offset, animated) {
+  const rowEl = wrap.querySelector('.row');
+  rowEl.style.transition = animated ? 'transform 0.4s var(--spring)' : 'none';
+  rowEl.style.transform = offset ? `translateX(${offset}px)` : '';
+  wrap.style.setProperty('--reveal', `${-offset}px`);
+  wrap.classList.toggle('revealing', offset < 0);
+  wrap.classList.toggle('animated', animated);
 }
+
+function closeOpenSwipe() {
+  if (openSwipe?.isConnected) setSwipe(openSwipe, 0, true);
+  openSwipe = null;
+}
+
+app.addEventListener('pointerdown', event => {
+  const wrap = event.target.closest('.swipe[data-swipe]');
+  if (!wrap || event.target.closest('.swipe-delete') || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  swipe = { wrap, x: event.clientX, y: event.clientY, base: wrap === openSwipe ? -DELETE_WIDTH : 0, offset: 0, on: false };
+});
+
+app.addEventListener('pointermove', event => {
+  if (!swipe) return;
+  const dx = event.clientX - swipe.x, dy = event.clientY - swipe.y;
+  if (!swipe.on) {
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { swipe = null; return; }
+    if (Math.abs(dx) < 10) return;
+    swipe.on = true;
+    if (openSwipe && openSwipe !== swipe.wrap) closeOpenSwipe();
+    swipe.wrap.setPointerCapture(event.pointerId);
+  }
+  // Past the button it gets heavier
+  let offset = Math.min(0, swipe.base + dx);
+  if (offset < -DELETE_WIDTH) offset = -DELETE_WIDTH - Math.sqrt(-offset - DELETE_WIDTH) * 4;
+  swipe.offset = offset;
+  setSwipe(swipe.wrap, offset, false);
+});
+
+function endSwipe() {
+  if (!swipe) return;
+  if (swipe.on) {
+    swipedAt = Date.now();
+    const open = swipe.offset < -DELETE_WIDTH / 2;
+    setSwipe(swipe.wrap, open ? -DELETE_WIDTH : 0, true);
+    openSwipe = open ? swipe.wrap : null;
+  }
+  swipe = null;
+}
+app.addEventListener('pointerup', endSwipe);
+app.addEventListener('pointercancel', endSwipe);
 
 // ---------- Events ----------
 
+// A short note at the top; with an action (復原) it stays a little longer
 let toastTimer;
-function toast(text) {
+function toast(text, action) {
   document.querySelector('.toast')?.remove();
+  clearTimeout(toastTimer);
   const el = document.createElement('div');
   el.className = 'toast';
-  el.textContent = text;
+  el.setAttribute('role', 'status');
+  el.innerHTML = `<span>${escape(text)}</span>${action ? `<button>${escape(action.label)}</button>` : ''}`;
+  el.querySelector('button')?.addEventListener('click', () => { el.remove(); action.run(); });
   document.body.append(el);
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.remove(), 1800);
+  toastTimer = setTimeout(() => {
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 250);
+  }, action ? 4000 : 1800);
+}
+
+function changeMonth(by) {
+  if (by > 0 && state.month >= monthKey(today())) return;
+  animate(by > 0 ? 'month-next' : 'month-prev', () => { state.month = shiftMonth(state.month, by); render(); });
 }
 
 document.addEventListener('click', async event => {
@@ -648,6 +1142,8 @@ document.addEventListener('click', async event => {
   if (!target) { if (state.menuOpen) { state.menuOpen = false; render(); } return; }
   const action = target.dataset.action;
   if (action !== 'menu' && state.menuOpen) { state.menuOpen = false; render(); }
+  // A tap that ends a swipe, or lands while a row is swiped open, only closes it
+  if (action === 'open' && (Date.now() - swipedAt < 350 || openSwipe)) { closeOpenSwipe(); return; }
   switch (action) {
     case 'google':
       await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
@@ -656,51 +1152,101 @@ document.addEventListener('click', async event => {
       if (!sample) await db.auth.signOut();
       state.status = 'signedOut'; state.entries = []; render();
       break;
-    case 'refresh': await refresh(); break;
+    case 'refresh': await refresh(); toast('已更新'); break;
     case 'menu': state.menuOpen = !state.menuOpen; render(); break;
-    case 'prevMonth': state.month = shiftMonth(state.month, -1); render(); break;
-    case 'nextMonth': state.month = shiftMonth(state.month, 1); render(); break;
+    case 'hideHint': remember('hideInstallHint'); render(); break;
+    case 'prevMonth': changeMonth(-1); break;
+    case 'nextMonth': changeMonth(1); break;
     case 'add': openEntry(null); break;
     case 'stats': state.basis = 'total'; go('stats'); break;
     case 'basis': state.basis = target.dataset.value; render(); break;
     case 'statsCategory': state.statsCategory = target.dataset.value; go('category'); break;
     case 'sort': state.byAmount = !state.byAmount; render(); break;
-    case 'back': history.back(); break;
+    case 'back': backByButton = true; history.back(); break;
     case 'open': openEntry(state.entries.find(e => e.id === target.dataset.id)); break;
+    case 'swipeDelete': openSwipe = null; await removeEntry(target.dataset.id); break;
     case 'settle': openSettle(null); break;
-    case 'close': closeSheet(); break;
-    case 'set': draft[target.dataset.group] = target.dataset.value; renderEntry(); break;
+    case 'close': requestClose(); break;
+    case 'key':
+      calcKey(draft.calc, target.dataset.value);
+      updateAmount();
+      break;
+    case 'panel':
+      if (draft.panel !== target.dataset.value) show(target.dataset.value);
+      break;
+    case 'keyAction': await keyAction(); break;
+    case 'primary': await primary(); break;
+    case 'payer': case 'division': {
+      const group = action, value = target.dataset.value;
+      draft[group] = value;
+      // 各付一部分 and 自訂 need a figure typed; the rest move straight on
+      if (value === 'both' || value === 'custom') {
+        renderEntry();
+        sheetRoot.querySelector('.part-field input')?.focus();
+      } else show(missing() ?? 'done');
+      break;
+    }
     case 'category':
-      if (draft.category !== target.dataset.value) { draft.name = ''; draft.addingSub = false; }
-      draft.category = target.dataset.value; renderEntry(); break;
+      // Another category's 子分類 doesn't carry over
+      if (draft.category !== target.dataset.value) draft.name = '';
+      draft.category = target.dataset.value;
+      show(missing() ?? 'done');
+      break;
+    case 'day': draft.date = target.dataset.value; show(missing() ?? 'done'); break;
+    case 'calMonth': draft.calMonth = shiftMonth(draft.calMonth, Number(target.dataset.value)); renderEntry(); break;
     case 'sub': {
       const name = target.dataset.value, picked = draft.name === name;
       draft.name = picked ? '' : name;
-      // Last time's amount, unless one is typed already
-      if (!picked && target.dataset.cents && !draft.amountText) draft.amountText = typed(Number(target.dataset.cents));
-      renderEntry(); break;
+      // Last time's amount, highlighted, unless one is typed already
+      if (!picked && target.dataset.cents && (calcEmpty(draft.calc) || draft.calc.preselected)) {
+        draft.calc = calcOf(typed(Number(target.dataset.cents)), true);
+      }
+      renderEntry();
+      break;
     }
     case 'addSub': draft.name = ''; draft.addingSub = true; renderEntry(); break;
-    case 'save': await saveEntry(); break;
-    case 'delete': await deleteEntry(draft?.id ?? settle?.id); break;
+    case 'delete': {
+      const id = draft?.id ?? settle?.id;
+      closeSheet();
+      await removeEntry(id);
+      break;
+    }
     case 'saveSettle': await saveSettle(); break;
   }
 });
 
 document.addEventListener('input', event => {
   const field = event.target.dataset.field, settleField = event.target.dataset.settle;
-  if (field && draft) { draft[field] = event.target.value; updateSummary(); }
+  if (field && draft) { draft[field] = event.target.value; updateAmount(); }
   if (settleField && settle) { settle[settleField] = event.target.value; updateSettleSummary(); }
 });
 
 document.addEventListener('keydown', event => {
   if (event.key === 'Enter' && event.target.id === 'newSub') { draft.addingSub = false; renderEntry(); }
-  if (event.key === 'Escape' && sheetRoot.innerHTML) closeSheet();
+  else if (event.key === 'Enter' && event.target.dataset.field === 'note') event.target.blur();
+  if (event.key === 'Escape' && (draft || settle)) requestClose();
+  // A keyboard on a computer types into the keypad too
+  if (draft?.panel === 'amount' && !event.target.matches('input')) {
+    const key = { '*': '×', '/': '÷', '-': '−', Backspace: 'back', Enter: null }[event.key] ?? event.key;
+    if (event.key === 'Enter') { event.preventDefault(); keyAction(); }
+    else if (/^[0-9.+×÷−=]$/.test(key) || key === 'back') { calcKey(draft.calc, key); updateAmount(); }
+  }
+});
+
+// Typing 子分類 or 備註 puts the keypad away, like the app
+document.addEventListener('focusin', event => {
+  if (draft && event.target.matches('.form input') && draft.panel !== 'done') {
+    draft.panel = 'done';
+    const bottom = sheetRoot.querySelector('.bottom-panel');
+    if (bottom) bottom.innerHTML = primaryButton();
+    sheetRoot.querySelector('.picker-card, .picker-backdrop')?.remove();
+    sheetRoot.querySelector('.amount-block')?.classList.remove('active');
+  }
 });
 
 // Coming back to the page picks up what Julia added meanwhile
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && state.status === 'ready' && !sheetRoot.innerHTML) refresh();
+  if (document.visibilityState === 'visible' && state.status === 'ready' && !draft && !settle) refresh();
 });
 
 // ---------- Start ----------
