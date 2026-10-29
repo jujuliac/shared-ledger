@@ -432,17 +432,19 @@ function render() {
   const [year, month] = key.split('-').map(Number);
   const isCurrent = key === monthKey(today());
   const ledger = currentLedger(), trip = isTrip(ledger);
-  const monthEntries = state.entries.filter(e => e.date.startsWith(key));
+  // 本月 or the whole ledger, for the totals and the list alike: a trip is
+  // one trip however many months it crosses, so it starts whole
   const whole = wholeTotals();
-  const spending = (whole ? state.entries : monthEntries).filter(e => e.kind === 'expense');
+  const monthEntries = whole ? state.entries : state.entries.filter(e => e.date.startsWith(key));
+  const spending = monthEntries.filter(e => e.kind === 'expense');
   const [mineTitle, totalTitle] = whole ? (trip ? ['全程我的份', '全程共用'] : ['全部我的份', '全部共用']) : ['本月我的份', '本月共用'];
   const archived = !!ledger.archived_at;
 
   const days = new Map();
   for (const e of monthEntries) { if (!days.has(e.date)) days.set(e.date, []); days.get(e.date).push(e); }
 
-  app.innerHTML = `
-    <header class="header sticky">
+  // The days the ledger covers in place of the month, when whole
+  const head = whole ? wholeTitle() : `
       <div>
         <div class="year">${year}</div>
         <div class="month">${month}月</div>
@@ -452,7 +454,11 @@ function render() {
         <button data-action="prevMonth" aria-label="上個月">${glyph('chevron-left')}</button>
         <span class="sep"></span>
         <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>${glyph('chevron-right')}</button>
-      </div>
+      </div>`;
+  app.innerHTML = `
+    <header class="header sticky">
+      ${head}
+      ${whole ? '<div class="spacer"></div>' : ''}
       <button class="round" data-action="menu" aria-label="帳號" aria-expanded="${state.menuOpen}">${glyph('circle-user')}</button>
     </header>
 
@@ -476,7 +482,7 @@ function render() {
 
       ${installHint()}
       ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
-      ${days.size === 0 ? '<p class="empty">這個月還沒有共用支出</p>' : ''}
+      ${days.size === 0 ? `<p class="empty">${whole ? '還沒有共用支出' : '這個月還沒有共用支出'}</p>` : ''}
       ${[...days.entries()].map(([day, rows]) => dayBlock(day, rows)).join('')}
     </div>
 
@@ -595,14 +601,16 @@ function renderStats() {
     </div>`;
 }
 
-// In place of the month when 共用分類 counts the whole ledger: the days it covers
-function wholeHeader() {
+// In place of the month when the list or 共用分類 counts the whole ledger:
+// the year small and the days it covers as the title
+function wholeTitle() {
   const days = state.entries.map(e => e.date).sort();
   const short = d => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
   const range = days.length ? (days[0] === days.at(-1) ? short(days[0]) : `${short(days[0])} – ${short(days.at(-1))}`) : currentLedger().name;
-  return `<div class="header"><div><div class="year">${days.length ? days[0].slice(0, 4) + ' · ' : ''}${isTrip(currentLedger()) ? '全程' : '全部'}</div>
-    <div class="month">${escape(range)}</div></div></div>`;
+  return `<div><div class="year">${days.length ? days[0].slice(0, 4) + ' · ' : ''}${isTrip(currentLedger()) ? '全程' : '全部'}</div>
+    <div class="month">${escape(range)}</div></div>`;
 }
+const wholeHeader = () => `<div class="header">${wholeTitle()}</div>`;
 
 function renderCategory() {
   const c = CATEGORIES[state.statsCategory] ?? CATEGORIES.other;
@@ -1511,7 +1519,7 @@ function toast(text, action) {
 }
 
 function changeMonth(by) {
-  if (by > 0 && state.month >= monthKey(today())) return;
+  if (wholeTotals() || (by > 0 && state.month >= monthKey(today()))) return;
   animate(by > 0 ? 'month-next' : 'month-prev', () => { state.month = shiftMonth(state.month, by); render(); });
 }
 
@@ -1545,7 +1553,16 @@ document.addEventListener('click', async event => {
     case 'tripSettings': openLedgerForm(currentLedger()); break;
     case 'saveLedger': await saveLedgerForm(); break;
     case 'archiveLedger': await archiveLedger(); break;
-    case 'scope': state.whole = !wholeTotals(); render(); break;
+    case 'scope': {
+      const whole = wholeTotals();
+      state.whole = !whole;
+      // A trip seen by month opens on its latest month, not an empty one
+      if (whole && isTrip(currentLedger()) && !state.entries.some(e => e.date.startsWith(state.month)) && state.entries.length) {
+        state.month = monthKey(state.entries[0].date);
+      }
+      render();
+      break;
+    }
     case 'currency':
       draft.foreign = !draft.foreign;
       draft.twdText = '';
