@@ -185,8 +185,9 @@ input, textarea { font: inherit; color: var(--text); }
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-width: 560px; margin: 0 auto;
   max-height: calc(100dvh - env(safe-area-inset-top) - 12px); overflow-y: auto; overscroll-behavior: contain;
-  /* Everything here is the shared ledger: its dark ground with the orange glow */
-  background-color: var(--base); background-image: var(--screen-light); border-radius: 28px 28px 0 0;
+  /* A still, raised warm grey a step above the page, with a faint orange
+     wash at the top, as in the app (never the page's own glow) */
+  background: linear-gradient(rgba(255, 138, 61, 0.10), rgba(255, 138, 61, 0) 30%), #1c1714; border-radius: 28px 28px 0 0;
   border: 1px solid var(--card-edge); border-bottom: 0; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
   padding: 0 var(--gutter) calc(env(safe-area-inset-bottom) + 16px); animation: rise 0.5s var(--ease) backwards;
 }
