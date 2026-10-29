@@ -419,3 +419,61 @@ button.form-row, .date-button, .split-chip { padding-left: 0; padding-right: 0; 
 .balance > div:first-child { min-width: 0; }
 .balance .amount { white-space: nowrap; font-size: clamp(26px, 8.4vw, 34px); }
 .grey-button { white-space: nowrap; flex: none; }
+
+/* Trip ledgers, laid out like the app's 明細 → 共用 */
+.ledger-row { display: flex; align-items: center; margin-top: 4px; }
+.ledger-row .spacer { flex: 1; }
+.ledger-name { display: flex; align-items: center; gap: 5px; min-height: 44px; color: var(--accent); font-size: 16px; font-weight: 600; }
+.ledger-name .glyph { width: 15px; height: 15px; }
+.ledger-name .glyph:last-child { width: 12px; height: 12px; }
+.ledger-name .archived { font-size: 13px; font-weight: 400; color: var(--secondary); }
+/* 本月／全程: plain text, tap to swap */
+.scope { display: flex; align-items: center; gap: 4px; min-height: 44px; padding-left: 12px; font-size: 15px; font-weight: 500; color: var(--text-soft); }
+.scope .glyph { width: 12px; height: 12px; }
+
+/* Who owes whom: one of the tiles, never red; tapping it opens 結清 */
+.balance-tile { text-align: left; color: var(--text); }
+.balance-tile:disabled { opacity: 1; }
+.balance-tile .value-line { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+.balance-tile .value { margin-top: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.balance-tile .settle-hint { margin-left: auto; flex: none; font-size: 13px; color: var(--secondary); }
+
+/* Rows: the payer as muted text, a mark only when it isn't half each */
+.row .detail { display: flex; align-items: center; gap: 6px; }
+.payer { font-weight: 500; }
+.payer.mine { color: #c4b6a8; }
+.payer.theirs { color: #a8b3c4; }
+.uneven { display: grid; color: var(--secondary); }
+.uneven .glyph, .pay .glyph { width: 13px; height: 13px; vertical-align: -2px; }
+.row .total.estimated { color: var(--text-soft); }
+.fab.blocked { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.12); box-shadow: none; color: rgba(255, 255, 255, 0.3); }
+
+/* The ledger sheet and the trip form */
+.sheet-body .rows + .rows { margin-top: 16px; }
+.section-title { margin: 20px 4px 8px; font-size: 13px; color: var(--secondary); }
+.footnote { margin: 8px 4px 16px; font-size: 13px; line-height: 1.45; color: var(--tertiary); }
+.ledger-item .ledger-icon { flex: none; width: 28px; display: grid; place-items: center; color: var(--accent); }
+.ledger-item .check { color: var(--accent); display: grid; }
+/* Action rows line up with the ledger rows: icon in the same 28px column, same size */
+.action-row { gap: 14px; min-height: 52px; font-size: 17px; color: var(--text); }
+.action-row .glyph { flex: none; width: 16px; height: 16px; margin: 0 6px; color: var(--secondary); }
+.ledger-item .ledger-icon .glyph { width: 16px; height: 16px; }
+.action-row.danger, .action-row.danger .glyph { color: var(--negative); }
+.sheet:not(.entry) .card .field { padding: 0 16px; border-bottom: 0; }
+.field select { flex: 1; min-width: 0; background: none; border: 0; outline: none; font: inherit; font-size: 16px; color: var(--text); text-align: right; text-align-last: right; color-scheme: dark; }
+.field select:disabled { color: var(--tertiary); }
+.field input.right { text-align: right; }
+.field > .name { width: auto; }
+
+/* Entry screen: which ledger under the title, the currency to swap, payment and NT$ */
+.entry-title { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ledger-pick { position: relative; display: flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 500; color: var(--accent); }
+.ledger-pick .glyph { width: 10px; height: 10px; }
+.ledger-pick select { position: absolute; inset: -8px; opacity: 0; font-size: 16px; }
+button.currency-pill { display: flex; align-items: center; gap: 4px; }
+button.currency-pill .glyph { width: 11px; height: 11px; }
+.currency-pill.on { background: rgba(255, 138, 61, 0.35); color: #fff; }
+.confirm-toggle { flex: none; display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); font-size: 14px; font-weight: 500; color: var(--secondary); }
+.confirm-toggle .glyph { width: 14px; height: 14px; }
+.confirm-toggle.on { color: var(--accent); }
+#twdInput.missing::placeholder { color: var(--negative); }
