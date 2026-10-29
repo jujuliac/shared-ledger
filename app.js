@@ -30,10 +30,13 @@ const CATEGORIES = {
   entertainment: { title: '娛樂', icon: 'gamepad-2', color: '#F78CFF', subs: [] },
   shopping: { title: '購物', icon: 'shopping-bag', color: '#B69CFF', subs: [] },
   other: { title: '其他', icon: 'ellipsis', color: '#8D93A6', subs: [] },
+  lodging: { title: '住宿', icon: 'bed-double', color: '#7FD8C9', subs: ['飯店', '民宿'] },
   transfer: { title: '結清', icon: 'arrow-left-right', color: '#C8F55A', subs: [] },
   income: { title: '收入', icon: 'banknote', color: '#C8F55A', subs: [] },
 };
 const PICKABLE = ['dining', 'grocery', 'bill', 'household', 'transport', 'entertainment', 'shopping', 'other'];
+// A trip has 住宿 and no 帳單 or 居家
+const TRIP_PICKABLE = ['dining', 'grocery', 'transport', 'lodging', 'entertainment', 'shopping', 'other'];
 
 const state = {
   status: 'loading', // loading | signedOut | notMember | ready
@@ -1048,7 +1051,7 @@ function pickerCard() {
   const d = draft, partner = partnerName(), a = amounts(draftTotal(), d);
   let body;
   if (d.panel === 'category') {
-    body = `<div class="cells two">${PICKABLE.map(key => cell('category', key, d.category === key,
+    body = `<div class="cells two">${(isTrip(draftLedger()) ? TRIP_PICKABLE : PICKABLE).map(key => cell('category', key, d.category === key,
       `${categoryIcon(key, 30)}<span>${CATEGORIES[key].title}</span>`, CATEGORIES[key].color)).join('')}</div>`;
   } else if (d.panel === 'payer') {
     body = `<div class="picker-title">誰付的</div>
@@ -1289,7 +1292,7 @@ function openLedgers() {
     return b === 0 ? '兩清' : b > 0 ? `${partner} 欠你 ${amount}` : `你欠 ${partner} ${amount}`;
   };
   const item = l => `<button class="row ledger-item" data-action="pickLedger" data-value="${l.id}" aria-pressed="${l.id === current.id}">
-      <span class="ledger-icon">${glyph(isTrip(l) ? 'plane' : 'house')}</span>
+      ${roundIcon(isTrip(l) ? 'plane' : 'house', 'var(--accent)')}
       <span class="main"><div class="title">${escape(l.name)}</div><div class="detail num">${escape(status(l))}</div></span>
       ${l.id === current.id ? `<span class="check">${glyph('check')}</span>` : ''}</button>`;
   showSheet('ledgers', '帳本', `
@@ -1301,11 +1304,16 @@ function openLedgers() {
     <div class="sheet-body">
       <div class="card rows">${activeLedgers().map(item).join('')}</div>
       <div class="card rows">
-        <button class="row action-row" data-action="newTrip">${glyph('plane')}<span>新增旅遊帳</span></button>
-        ${isTrip(current) ? `<button class="row action-row" data-action="tripSettings">${glyph('sliders-horizontal')}<span>${escape(current.name)} 設定</span></button>` : ''}
+        <button class="row action-row" data-action="newTrip">${roundIcon('plane', 'var(--text-soft)')}<span class="main">新增旅遊帳</span><span class="chevron">${glyph('chevron-right')}</span></button>
+        ${isTrip(current) ? `<button class="row action-row" data-action="tripSettings">${roundIcon('sliders-horizontal', 'var(--text-soft)')}<span class="main">${escape(current.name)} 設定</span><span class="chevron">${glyph('chevron-right')}</span></button>` : ''}
       </div>
       ${archived.length ? `<div class="section-title">已封存</div><div class="card rows">${archived.map(item).join('')}</div>` : ''}
     </div>`);
+}
+
+// The rounded-square tinted icon of the app's 設定 rows, for the ledger sheet
+function roundIcon(name, tint) {
+  return `<span class="icon round-icon" style="--tint:${tint}">${glyph(name)}</span>`;
 }
 
 // Adding a trip or a trip's settings: name, currency, the two rates

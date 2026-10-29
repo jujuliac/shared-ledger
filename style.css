@@ -185,7 +185,8 @@ input, textarea { font: inherit; color: var(--text); }
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-width: 560px; margin: 0 auto;
   max-height: calc(100dvh - env(safe-area-inset-top) - 12px); overflow-y: auto; overscroll-behavior: contain;
-  background: var(--sheet); border-radius: 28px 28px 0 0;
+  /* Everything here is the shared ledger: its dark ground with the orange glow */
+  background-color: var(--base); background-image: var(--screen-light); border-radius: 28px 28px 0 0;
   border: 1px solid var(--card-edge); border-bottom: 0; box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
   padding: 0 var(--gutter) calc(env(safe-area-inset-bottom) + 16px); animation: rise 0.5s var(--ease) backwards;
 }
@@ -454,11 +455,17 @@ button.form-row, .date-button, .split-chip { padding-left: 0; padding-right: 0; 
 .footnote { margin: 8px 4px 16px; font-size: 13px; line-height: 1.45; color: var(--tertiary); }
 .ledger-item .ledger-icon { flex: none; width: 28px; display: grid; place-items: center; color: var(--accent); }
 .ledger-item .check { color: var(--accent); display: grid; }
-/* Action rows line up with the ledger rows: icon in the same 28px column, same size */
-.action-row { gap: 14px; min-height: 52px; font-size: 17px; color: var(--text); }
-.action-row .glyph { flex: none; width: 16px; height: 16px; margin: 0 6px; color: var(--secondary); }
-.ledger-item .ledger-icon .glyph { width: 16px; height: 16px; }
-.action-row.danger, .action-row.danger .glyph { color: var(--negative); }
+/* Ledger sheet rows, laid out like the app's 設定: rounded-square tinted
+   icons, 60px rows, dividers starting past the icon */
+.sheet.ledgers .row { gap: 12px; min-height: 60px; padding: 8px 16px; }
+.sheet.ledgers .rows > .row + .row { border-top: 0; background: linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06)) 64px 0 / calc(100% - 80px) 1px no-repeat; }
+.action-row { font-size: 17px; color: var(--text); }
+.action-row .chevron { color: var(--tertiary); display: grid; }
+.action-row .chevron .glyph { width: 14px; height: 14px; }
+.round-icon { width: 36px; height: 36px; border-radius: 10px; color: var(--tint); background: color-mix(in srgb, var(--tint) 12%, transparent); }
+.round-icon .glyph { width: 17px; height: 17px; }
+.action-row.danger > .glyph { color: var(--negative); }
+.action-row.danger { color: var(--negative); }
 .sheet:not(.entry) .card .field { padding: 0 16px; border-bottom: 0; }
 .field select { flex: 1; min-width: 0; background: none; border: 0; outline: none; font: inherit; font-size: 16px; color: var(--text); text-align: right; text-align-last: right; color-scheme: dark; }
 .field select:disabled { color: var(--tertiary); }
