@@ -215,7 +215,16 @@ function detailOf(e) {
   const s = splitOf(e);
   const payer = { me: '我付', partner: `${partnerName()} 付`, both: '各付一部分' }[s.payer];
   const division = { equal: '平分', allMine: '全算我', allPartners: `全算 ${partnerName()}`, custom: '自訂' }[s.division];
-  return [payer, division, e.note && !e.note.startsWith('Bill Bear 匯入') ? e.note : null].filter(Boolean).join(' · ');
+  return `${payer} · ${division}`;
+}
+
+// The note as the list shows it, like the app: the Bill Bear import marker
+// (匯入 #12) is bookkeeping, so only what follows it counts, and a note that
+// just repeats the name counts as none
+function listNote(e) {
+  let text = (e.note ?? '').trim();
+  if (text.startsWith('Bill Bear 匯入')) text = text.includes('；') ? text.slice(text.indexOf('；') + 1) : '';
+  return text && text !== e.name ? text : null;
 }
 
 // 子分類 for a category: names used under it before in that ledger, most used
@@ -701,6 +710,7 @@ function row(e, withDate = false) {
   const showShare = !isForeign(e) && e.kind === 'expense' && splitOf(e).division !== 'equal';
   const deletable = e.kind !== 'income';
   const pay = PAYMENTS[e.payment_method];
+  const note = listNote(e);
   return `
     <div class="swipe ${state.flashId === e.id ? 'flash' : ''}" ${deletable ? `data-swipe="${e.id}"` : ''}>
     ${deletable ? `<button class="swipe-delete" data-action="swipeDelete" data-id="${e.id}" tabindex="-1">${glyph('trash-2')}<span>刪除</span></button>` : ''}
@@ -708,7 +718,7 @@ function row(e, withDate = false) {
       <span class="icon" style="background:${c.color}14;border:1px solid ${c.color}29;color:${c.color}">${glyph(c.icon)}</span>
       <span class="main">
         <div class="title">${escape(e.name || c.title)}</div>
-        <div class="detail" aria-label="${escape(detailOf(e))}">${withDate ? `<span>${m}/${d}</span>` : ''}${marksOf(e)}</div>
+        <div class="detail" aria-label="${escape([note, detailOf(e)].filter(Boolean).join(', '))}">${withDate ? `<span>${m}/${d}</span>` : ''}${note ? `<span class="note">${escape(note)}</span><span>·</span>` : ''}${marksOf(e)}</div>
       </span>
       <span class="right">
         <div class="total num ${e.twd_estimated ? 'estimated' : ''}">${e.twd_estimated ? '≈ ' : ''}${money(e.amount_cents)}</div>
@@ -1715,11 +1725,11 @@ function sampleEntries() {
   });
   const osaka = (name, category, offset, yen, twd) => ({ ...trip(name, category, offset, yen, twd, 'card', true, SAMPLE_OSAKA.id), twd_estimated: false });
   return [
-    e('晚餐', 'dining', 0, 143400), e('PX', 'grocery', 1, 54500), e('咖啡', 'dining', 3, 54000, false),
-    e('飲料', 'dining', 3, 11500), e('網路', 'bill', 5, 79900), e('家用品', 'grocery', 6, 137000),
+    { ...e('晚餐', 'dining', 0, 143400), note: '鐵板燒' }, e('PX', 'grocery', 1, 54500), e('咖啡', 'dining', 3, 54000, false),
+    e('飲料', 'dining', 3, 11500), e('網路', 'bill', 5, 79900), { ...e('家用品', 'grocery', 6, 137000), note: '滑鼠' },
     e('Taxi', 'transport', 9, 42500, false, 42500), e('電影', 'entertainment', 12, 61000),
-    trip('拉麵', 'dining', 1, 2400, 51000, 'cash'), trip('Suica', 'transport', 1, 680, 14500, 'suica'),
-    trip('藥妝', 'shopping', 2, 5980, 127100, 'card', false),
+    { ...trip('拉麵', 'dining', 1, 2400, 51000, 'cash'), note: '一蘭' }, trip('Suica', 'transport', 1, 680, 14500, 'suica'),
+    { ...trip('藥妝', 'shopping', 2, 5980, 127100, 'card', false), note: '松本清的面膜、眼藥水和防曬' },
     osaka('燒肉', 'dining', 160, 4600, 98000), osaka('環球影城', 'entertainment', 161, 9800, 210000),
     { ...e('結清', 'transfer', 150, 154000, false, 154000), kind: 'settlement', ledger_id: SAMPLE_OSAKA.id,
       erik_share_cents: 0, julia_paid_cents: 0, erik_paid_cents: 154000, julia_share_cents: 154000 },

@@ -442,6 +442,9 @@ button.form-row, .date-button, .split-chip { padding-left: 0; padding-right: 0; 
 
 /* Rows: the payer as muted text, a mark only when it isn't half each */
 .row .detail { display: flex; align-items: center; gap: 6px; }
+/* The note gives way before the payer when the line runs short */
+.row .detail > * { flex-shrink: 0; }
+.row .detail > .note { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .payer { font-weight: 500; }
 .payer.mine { color: #c4b6a8; }
 .payer.theirs { color: #a8b3c4; }
