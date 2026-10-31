@@ -237,7 +237,9 @@ function subcategories(category, ledgerId, code) {
     counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
     if (!latest.has(e.name)) latest.set(e.name, e);
   }
-  const used = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || (latest.get(b).date > latest.get(a).date ? 1 : -1));
+  // Ties go by name, like the app, so the chips keep their places
+  const byDate = (a, b) => latest.get(b).date.localeCompare(latest.get(a).date);
+  const used = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || byDate(a, b) || (a < b ? -1 : a > b ? 1 : 0));
   const unused = (CATEGORIES[category]?.subs ?? []).filter(n => !counts.has(n));
   const amountOf = n => { const e = latest.get(n); return (e.currency ?? 'TWD') === code ? recordedAmount(e) : null; };
   return [...used.map(n => ({ name: n, cents: amountOf(n) })), ...unused.map(n => ({ name: n, cents: null }))];
