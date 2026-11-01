@@ -1225,7 +1225,7 @@ function updateAmount() {
   fitHeadline(headline);
   fitExpression(q('#expression'), calcExpression(d.calc) || ' ');
   const code = draftCode();
-  q('#myShare').textContent = a && total > 0 ? `我的份 ${currencySign(code)}${money(a.myShare)}` : '';
+  q('#myShare').textContent = a && total > 0 ? `我的份 ${fmt(a.myShare, code)}` : '';
   const note = q('#divisionNote');
   if (note) {
     note.className = 'picker-note num' + (total > 0 && !a ? ' error' : '');
