@@ -755,7 +755,9 @@ function changeRow(c) {
   const color = deleted ? 'var(--tertiary)' : cat.color;
   const what = `${nameOf(c.by)} ${{ added: '新增', edited: '修改', deleted: '刪除' }[c.action]}`;
   const ledgerId = e.ledger_id ?? HOUSEHOLD;
-  const by = [what, stamp(c.at), ...(ledgerId !== state.ledgerId ? [ledgerOf(ledgerId).name] : [])].join(' · ');
+  // The day is the section's; the full stamp didn't fit (Julia, 2026-11-02)
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(c.at);
+  const by = [what, time, ...(ledgerId !== state.ledgerId ? [ledgerOf(ledgerId).name] : [])].join(' · ');
   return `
     <button class="row change ${deleted ? 'deleted' : ''}" ${deleted ? 'disabled' : `data-action="openChange" data-id="${e.id}"`}>
       <span class="icon" style="background:${deleted ? 'rgba(141,147,166,0.07)' : cat.color + '14'};border:1px solid ${deleted ? 'rgba(141,147,166,0.16)' : cat.color + '29'};color:${color}">${glyph(cat.icon)}</span>
@@ -785,10 +787,24 @@ function changesTile() {
   </button>`;
 }
 
+// Newest first, by the day each change was made, headed like the list's days
 function renderChanges() {
+  const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const days = new Map();
+  for (const c of changes().slice(0, 200)) {
+    const day = dayOf.format(c.at);
+    days.set(day, [...(days.get(day) ?? []), c]);
+  }
   app.innerHTML = `
     ${topBar('最近更新')}
-    <div class="card rows">${changes().slice(0, 200).map(changeRow).join('')}</div>
+    ${[...days].map(([day, list]) => {
+      const { word, short } = dayLabel(day);
+      return `
+        <div class="day-head">
+          <span class="word">${word ?? short}</span>${word ? `<span class="date">· ${short}</span>` : ''}
+        </div>
+        <div class="card rows">${list.map(changeRow).join('')}</div>`;
+    }).join('')}
     <p class="footnote">匯入的舊紀錄沒有記錄是誰寫的，不會列在這裡</p>`;
 }
 
