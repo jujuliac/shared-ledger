@@ -793,8 +793,9 @@ function renderChanges() {
 }
 
 // At the end of a month, a firm pull up goes on to the month before (Erik,
-// 2026-11-02), with a note at the bottom saying so; a whole ledger has no
-// month to step
+// 2026-11-02), and at the top a firm pull down to the month after (Julia),
+// with a note saying so; a whole ledger has no month to step, and there's
+// none after this one
 const PULL_TO_STEP = 80;
 let pull = null;
 const pullNote = Object.assign(document.createElement('div'), { className: 'month-pull' });
@@ -802,25 +803,29 @@ document.body.append(pullNote);
 const atEnd = () => scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
 document.addEventListener('touchstart', event => {
   if (state.status !== 'ready' || state.view !== 'list' || draft || settle || wholeTotals()) return;
-  pull = { y: event.touches[0].clientY, past: 0 };
+  pull = { y: event.touches[0].clientY, by: 0 };
 }, { passive: true });
 document.addEventListener('touchmove', event => {
   if (!pull) return;
-  if (!atEnd()) { pull.y = event.touches[0].clientY; pull.past = 0; pullNote.style.opacity = 0; return; }
-  const past = Math.max(0, pull.y - event.touches[0].clientY);
-  if ((pull.past >= PULL_TO_STEP) !== (past >= PULL_TO_STEP)) navigator.vibrate?.(8);
-  pull.past = past;
-  const month = Number(shiftMonth(state.month, -1).slice(5));
-  pullNote.textContent = past >= PULL_TO_STEP ? `放開看${month}月` : `繼續往上滑看${month}月`;
-  pullNote.classList.toggle('ready', past >= PULL_TO_STEP);
+  const y = event.touches[0].clientY;
+  // Up past the end steps back a month; down past the top, forward
+  const by = atEnd() && pull.y > y ? -1 : scrollY <= 0 && y > pull.y && state.month < monthKey(today()) ? 1 : 0;
+  if (!by) { pull.y = y; pull.by = 0; pullNote.style.opacity = 0; return; }
+  const past = Math.abs(y - pull.y), ready = past >= PULL_TO_STEP;
+  if ((pull.by !== 0 && pull.ready) !== ready) navigator.vibrate?.(8);
+  Object.assign(pull, { by, ready });
+  const month = Number(shiftMonth(state.month, by).slice(5));
+  pullNote.textContent = ready ? `放開看${month}月` : by < 0 ? `繼續往上滑看${month}月` : `繼續往下拉看${month}月`;
+  pullNote.classList.toggle('ready', ready);
+  pullNote.classList.toggle('top', by > 0);
   pullNote.style.opacity = Math.min(1, past / PULL_TO_STEP);
 }, { passive: true });
 document.addEventListener('touchend', () => {
   if (!pull) return;
-  const step = pull.past >= PULL_TO_STEP;
+  const { by, ready } = pull;
   pull = null;
   pullNote.style.opacity = 0;
-  if (step) { changeMonth(-1); scrollTo(0, 0); }
+  if (by && ready) { changeMonth(by); scrollTo(0, 0); }
 });
 
 function dayBlock(day, rows) {

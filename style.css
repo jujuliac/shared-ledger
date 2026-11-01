@@ -526,3 +526,4 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .month-pull { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 96px); text-align: center;
   font-size: 13px; color: var(--secondary); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.15s; }
 .month-pull.ready { color: var(--text); }
+.month-pull.top { bottom: auto; top: calc(env(safe-area-inset-top) + 72px); }
