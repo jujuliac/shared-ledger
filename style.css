@@ -31,9 +31,8 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 /* A quick 0 0 on the keypad zoomed the page in (Erik, 2026-11-02): no
-   double-tap zoom anywhere. On every element, since it doesn't reach into
-   a scrolling sheet from html; the swipe and drag rules below still win. */
-* { touch-action: manipulation; }
+   double-tap zoom on buttons; pinch still works */
+html, button { touch-action: manipulation; }
 html, body {
   margin: 0;
   background: var(--base);
