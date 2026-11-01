@@ -475,7 +475,8 @@ function render() {
         <button data-action="prevMonth" aria-label="上個月">${glyph('chevron-left')}</button>
         <span class="sep"></span>
         <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>${glyph('chevron-right')}</button>
-      </div>`;
+      </div>
+      ${isCurrent ? '' : '<button class="today-button" data-action="thisMonth">今天</button>'}`;
   app.innerHTML = `
     <header class="header sticky">
       ${head}
@@ -841,7 +842,7 @@ document.addEventListener('touchend', () => {
   const { by, ready } = pull;
   pull = null;
   pullNote.style.opacity = 0;
-  if (by && ready) { changeMonth(by); scrollTo(0, 0); }
+  if (by && ready) changeMonth(by);
 });
 
 function dayBlock(day, rows) {
@@ -1766,9 +1767,18 @@ function toast(text, action) {
   }, action ? 4000 : 1800);
 }
 
+// The new month starts at its top; scrolling there inside the change keeps
+// the old month from jumping before it slides out
 function changeMonth(by) {
   if (wholeTotals() || (by > 0 && state.month >= monthKey(today()))) return;
-  animate(by > 0 ? 'month-next' : 'month-prev', () => { state.month = shiftMonth(state.month, by); render(); });
+  animate(by > 0 ? 'month-next' : 'month-prev', () => { state.month = shiftMonth(state.month, by); render(); scrollTo(0, 0); });
+}
+
+// 今天: back to this month from any other, like the app's
+function toThisMonth() {
+  const now = monthKey(today());
+  if (state.month === now) return;
+  animate('month-next', () => { state.month = now; render(); scrollTo(0, 0); });
 }
 
 document.addEventListener('click', async event => {
@@ -1791,6 +1801,7 @@ document.addEventListener('click', async event => {
     case 'hideHint': remember('hideInstallHint'); render(); break;
     case 'prevMonth': changeMonth(-1); break;
     case 'nextMonth': changeMonth(1); break;
+    case 'thisMonth': toThisMonth(); break;
     case 'add':
       // An archived ledger is for looking back at
       if (currentLedger().archived_at) toast('已封存的帳本不能新增'); else openEntry(null);

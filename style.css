@@ -97,6 +97,8 @@ input, textarea { font: inherit; color: var(--text); }
 .pill button { width: 46px; height: 44px; display: grid; place-items: center; color: var(--text-soft); }
 .pill .sep { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.14); }
 .pill button:disabled { opacity: 0.3; }
+.today-button { height: 44px; padding: 0 14px; border-radius: 999px; font-size: 15px; font-weight: 600; color: var(--text);
+  background: rgba(255, 138, 61, 0.22); border: 1px solid rgba(255, 138, 61, 0.35); }
 .round { width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); font-size: 16px; }
 
 .card {
@@ -412,8 +414,9 @@ html[data-motion^="month"] .month-body { view-transition-name: month-body; }
 html[data-motion^="month"] .header .month { view-transition-name: month-label; }
 html[data-motion^="month"]::view-transition-old(root), html[data-motion^="month"]::view-transition-new(root) { animation: none; }
 ::view-transition-group(month-body), ::view-transition-group(month-label) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
-::view-transition-old(month-body), ::view-transition-old(month-label) { animation: 0.32s var(--ease) both month-out; }
-::view-transition-new(month-body), ::view-transition-new(month-label) { animation: 0.32s var(--ease) both month-in; }
+/* The old month is gone before the new one comes in: crossed, their rows read over each other */
+::view-transition-old(month-body), ::view-transition-old(month-label) { animation: 0.14s ease-in both month-out; }
+::view-transition-new(month-body), ::view-transition-new(month-label) { animation: 0.26s var(--ease) 0.1s both month-in; }
 html[data-motion="month-next"] { --from: 40px; --to: -40px; }
 html[data-motion="month-prev"] { --from: -40px; --to: 40px; }
 @keyframes month-in { from { transform: translateX(var(--from)); opacity: 0; } }
