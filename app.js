@@ -792,6 +792,37 @@ function renderChanges() {
     <p class="footnote">匯入的舊紀錄沒有記錄是誰寫的，不會列在這裡</p>`;
 }
 
+// At the end of a month, a firm pull up goes on to the month before (Erik,
+// 2026-11-02), with a note at the bottom saying so; a whole ledger has no
+// month to step
+const PULL_TO_STEP = 80;
+let pull = null;
+const pullNote = Object.assign(document.createElement('div'), { className: 'month-pull' });
+document.body.append(pullNote);
+const atEnd = () => scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
+document.addEventListener('touchstart', event => {
+  if (state.status !== 'ready' || state.view !== 'list' || draft || settle || wholeTotals()) return;
+  pull = { y: event.touches[0].clientY, past: 0 };
+}, { passive: true });
+document.addEventListener('touchmove', event => {
+  if (!pull) return;
+  if (!atEnd()) { pull.y = event.touches[0].clientY; pull.past = 0; pullNote.style.opacity = 0; return; }
+  const past = Math.max(0, pull.y - event.touches[0].clientY);
+  if ((pull.past >= PULL_TO_STEP) !== (past >= PULL_TO_STEP)) navigator.vibrate?.(8);
+  pull.past = past;
+  const month = Number(shiftMonth(state.month, -1).slice(5));
+  pullNote.textContent = past >= PULL_TO_STEP ? `放開看${month}月` : `繼續往上滑看${month}月`;
+  pullNote.classList.toggle('ready', past >= PULL_TO_STEP);
+  pullNote.style.opacity = Math.min(1, past / PULL_TO_STEP);
+}, { passive: true });
+document.addEventListener('touchend', () => {
+  if (!pull) return;
+  const step = pull.past >= PULL_TO_STEP;
+  pull = null;
+  pullNote.style.opacity = 0;
+  if (step) { changeMonth(-1); scrollTo(0, 0); }
+});
+
 function dayBlock(day, rows) {
   const { word, short } = dayLabel(day);
   return `
@@ -1325,7 +1356,7 @@ function updateAmount() {
   const q = id => sheetRoot.querySelector(id);
   const headline = q('#headline');
   rollText(headline, calcHeadline(d.calc));
-  headline.classList.toggle('empty', calcEmpty(d.calc));
+  headline.classList.toggle('blank', calcEmpty(d.calc));
   headline.classList.toggle('preselected', d.calc.preselected);
   fitHeadline(headline);
   fitExpression(q('#expression'), calcExpression(d.calc) || ' ');
