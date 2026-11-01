@@ -118,7 +118,8 @@ input, textarea { font: inherit; color: var(--text); }
 /* Two tiles and the 分類 card peeking in from the right, like the app */
 .tile { flex: 0 0 calc((100% - 8px) / 2 - 28px); padding: 12px 14px; border-radius: 18px; scroll-snap-align: start; }
 .tile.link { flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0 22px; font-size: 17px; font-weight: 600; color: var(--text); }
-.tile.link .glyph { color: var(--accent); width: 22px; height: 22px; }
+/* Grey, so the one icon in the row doesn't pull the eye */
+.tile.link .glyph { color: var(--secondary); width: 22px; height: 22px; }
 .tile .label { font-size: 13px; color: var(--secondary); }
 .tile .value { font-size: 18px; font-weight: 600; margin-top: 4px; }
 
@@ -506,4 +507,7 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .footnote { font-size: 13px; color: var(--tertiary); margin: 10px 4px 0; }
 
 .row.change.deleted:disabled { opacity: 1; }
-.new-count { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--base); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.changes-tile { text-align: left; color: var(--text); }
+.changes-tile .label-line { display: flex; align-items: baseline; gap: 6px; }
+.changes-tile .fresh { margin-left: auto; flex: none; font-size: 13px; color: var(--accent); }
+.changes-tile .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

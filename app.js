@@ -497,8 +497,8 @@ function render() {
       <section class="tiles">
         <div class="card tile"><div class="label">${mineTitle}</div><div class="value num">${money(spending.reduce((s, e) => s + share(e, state.me), 0))}</div></div>
         <div class="card tile"><div class="label">${totalTitle}</div><div class="value num">${money(spending.reduce((s, e) => s + e.amount_cents, 0))}</div></div>
-        ${balanceTile()}
         <button class="card tile link" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}<span>分類</span></button>
+        ${balanceTile()}
         ${changesTile()}
       </section>
 
@@ -763,13 +763,19 @@ function changeRow(c) {
     </button>`;
 }
 
-// The way into 最近更新, its own page, last in the row like 分類, with how
-// many of the other one's changes are new
+// The way into 最近更新, its own page: laid out like the balance beside it,
+// a small title over the latest change, with how many of the other one's
+// changes are new
 function changesTile() {
   const list = changes();
   if (!list.length) return '';
-  const fresh = list.filter(isNewChange).length;
-  return `<button class="card tile link" data-action="changes" aria-label="最近更新${fresh ? `，${fresh} 筆新的` : ''}">${glyph('history')}<span>最近更新</span>${fresh ? `<span class="new-count num">${fresh}</span>` : ''}</button>`;
+  const fresh = list.filter(isNewChange).length, latest = list[0];
+  const cat = CATEGORIES[latest.entry.category] ?? CATEGORIES.other;
+  const summary = `${nameOf(latest.by)} ${{ added: '新增', edited: '修改', deleted: '刪除' }[latest.action]} ${latest.entry.name || cat.title}`;
+  return `<button class="card tile changes-tile" data-action="changes" aria-label="最近更新${fresh ? `，${fresh} 筆新的` : ''}">
+    <div class="label-line"><span class="label">最近更新</span>${fresh ? `<span class="fresh">${fresh} 筆新的</span>` : ''}</div>
+    <div class="value">${escape(summary)}</div>
+  </button>`;
 }
 
 function renderChanges() {
