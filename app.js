@@ -780,7 +780,7 @@ function changesTile() {
   const cat = CATEGORIES[latest.entry.category] ?? CATEGORIES.other;
   const summary = `${nameOf(latest.by)} ${{ added: '新增', edited: '修改', deleted: '刪除' }[latest.action]} ${latest.entry.name || cat.title}`;
   return `<button class="card tile changes-tile" data-action="changes" aria-label="最近更新${fresh ? `，${fresh} 筆新的` : ''}">
-    <div class="label-line"><span class="label">最近更新</span>${fresh ? `<span class="fresh">${fresh} 筆新的</span>` : ''}</div>
+    <div class="label-line"><span class="label">最近更新</span>${fresh ? `<span class="fresh num" aria-hidden="true">${fresh}</span>` : ''}</div>
     <div class="value">${escape(summary)}</div>
   </button>`;
 }

@@ -441,6 +441,8 @@ button.form-row, .date-button, .split-chip { padding-left: 0; padding-right: 0; 
 
 /* Who owes whom: one of the tiles, never red; tapping it opens 結清 */
 .balance-tile { text-align: left; color: var(--text); }
+/* A long amount first makes the tile wider, then smaller, and only then is cut (Julia, 2026-11-02) */
+.tile.balance-tile { flex: 0 0 auto; min-width: calc((100% - 8px) / 2 - 28px); max-width: calc(((100% - 8px) / 2 - 28px) * 1.5); }
 .balance-tile:disabled { opacity: 1; }
 .balance-tile .value-line { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
 .balance-tile .value { margin-top: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -513,5 +515,7 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .changes-tile { text-align: left; color: var(--text); }
 .changes-tile .label-line { display: flex; align-items: baseline; gap: 6px; }
 .changes-tile .label-line .label { min-width: 0; }
-.changes-tile .fresh { margin-left: auto; flex: none; font-size: 13px; color: var(--accent); }
+.changes-tile .fresh { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  background: rgba(255, 138, 61, 0.2); color: var(--accent); font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; }
 .changes-tile .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
