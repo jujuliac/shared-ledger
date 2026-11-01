@@ -221,10 +221,7 @@ input, textarea { font: inherit; color: var(--text); }
 .figures:active:not(:disabled) { transform: none; }
 .figures .expression { font-size: 14px; color: var(--secondary); white-space: pre; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .figures .headline { font-size: 54px; font-weight: 600; line-height: 1.05; letter-spacing: -0.5px; white-space: nowrap; color: var(--text); transition: color 0.2s, font-size 0.2s var(--ease); }
-.figures .headline .roll { display: inline-block; animation: roll-up 0.2s var(--ease); }
-.figures .headline .roll.down { animation-name: roll-down; }
-@keyframes roll-up { from { transform: translateY(0.4em); opacity: 0; filter: blur(3px); } }
-@keyframes roll-down { from { transform: translateY(-0.4em); opacity: 0; filter: blur(3px); } }
+.figures .headline > span { display: inline-block; white-space: pre; }
 .figures .headline.empty { color: var(--tertiary); }
 .figures .headline.preselected { background: rgba(255, 138, 61, 0.22); border-radius: 10px; padding: 0 6px; }
 .date-line { display: flex; justify-content: flex-end; padding-bottom: 4px; }

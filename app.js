@@ -1179,23 +1179,29 @@ function fitHeadline(headline) {
   headline.style.fontSize = target;
 }
 
-// Like the app's numericText: what changed after the unchanged beginning
-// rolls in (up as the number grows, down as it shrinks); the rest stays put
+// Like the app's numericText: the digits already there glide aside to make
+// room, and only the new ones fade up into place, small and quick
 function rollText(el, text) {
   const old = el.dataset.text ?? '';
   if (old === text) return;
   el.dataset.text = text;
   if (reduceMotion.matches || !old) { el.textContent = text; return; }
-  const down = text.length < old.length || (text.length === old.length && text < old);
   // Compared without the thousands commas, which move as digits are typed
   const bare = text.replaceAll(',', ''), oldBare = old.replaceAll(',', '');
   let keep = 0, same = 0;
   while (keep < bare.length && bare[keep] === oldBare[keep]) keep++;
   for (let seen = 0; same < text.length && (text[same] === ',' || seen < keep); same++) if (text[same] !== ',') seen++;
-  const span = document.createElement('span');
-  span.className = down ? 'roll down' : 'roll';
-  span.textContent = text.slice(same);
-  el.replaceChildren(text.slice(0, same), span);
+  const down = text.length < old.length || (text.length === old.length && text < old);
+  const kept = el.firstElementChild?.dataset.kept === '' ? el.firstElementChild : null;
+  const from = (kept ?? el).getBoundingClientRect().left;
+  const head = Object.assign(document.createElement('span'), { textContent: text.slice(0, same) });
+  head.dataset.kept = '';
+  const tail = Object.assign(document.createElement('span'), { textContent: text.slice(same) });
+  el.replaceChildren(head, tail);
+  const ease = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+  const shift = from - head.getBoundingClientRect().left;
+  if (shift) head.animate([{ transform: `translateX(${shift}px)` }, { transform: 'none' }], { duration: 220, easing: ease });
+  tail.animate([{ transform: `translateY(${down ? -0.15 : 0.15}em)`, opacity: 0, filter: 'blur(2px)' }, { transform: 'none', opacity: 1, filter: 'none' }], { duration: 220, easing: ease });
 }
 
 // What a key changes: the figures, 我的份 and the buttons' titles
