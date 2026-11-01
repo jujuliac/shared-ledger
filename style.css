@@ -137,16 +137,17 @@ input, textarea { font: inherit; color: var(--text); }
 .rows .row .icon { width: 44px; height: 44px; }
 .rows > .row + .row, .swipe + .swipe { border-top: 1px solid rgba(255, 255, 255, 0.06); }
 
-/* Swipe a record left and 刪除 opens up behind it */
+/* Swipe a record left and a rounded 刪除 button opens up inside the card, as in the app */
 .swipe { position: relative; overflow: hidden; touch-action: pan-y; }
 .swipe .row { position: relative; z-index: 1; }
+.swipe .row:focus:not(:focus-visible) { outline: none; }
 .swipe-delete {
-  position: absolute; top: 0; right: 0; bottom: 0; width: var(--reveal, 0); min-width: 0; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  background: #ff5a4f; color: #fff; font-size: 12px; font-weight: 600; opacity: 0;
+  position: absolute; top: 8px; right: 6px; bottom: 8px; width: 60px; border-radius: 12px;
+  display: grid; place-items: center; background: var(--negative); color: #fff;
+  opacity: var(--reveal-fade, 0);
 }
-.swipe.revealing .swipe-delete { opacity: 1; }
-.swipe.animated .swipe-delete { transition: width 0.4s var(--spring), opacity 0.2s; }
+.swipe-delete .glyph { width: 20px; height: 20px; }
+.swipe.animated .swipe-delete { transition: opacity 0.3s var(--ease); }
 .swipe.removing { height: 0 !important; opacity: 0; transition: height 0.24s var(--ease), opacity 0.2s; }
 .swipe.flash .row { animation: flash 1.4s ease-out; }
 @keyframes flash { from { background: rgba(255, 138, 61, 0.22); } }
@@ -219,7 +220,11 @@ input, textarea { font: inherit; color: var(--text); }
 .figures { flex: 1; min-width: 0; min-height: 64px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; padding: 0 8px; }
 .figures:active:not(:disabled) { transform: none; }
 .figures .expression { font-size: 14px; color: var(--secondary); white-space: pre; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.figures .headline { font-size: 54px; font-weight: 600; line-height: 1.05; letter-spacing: -0.5px; white-space: nowrap; color: var(--text); transition: color 0.2s; }
+.figures .headline { font-size: 54px; font-weight: 600; line-height: 1.05; letter-spacing: -0.5px; white-space: nowrap; color: var(--text); transition: color 0.2s, font-size 0.2s var(--ease); }
+.figures .headline .roll { display: inline-block; animation: roll-up 0.2s var(--ease); }
+.figures .headline .roll.down { animation-name: roll-down; }
+@keyframes roll-up { from { transform: translateY(0.4em); opacity: 0; filter: blur(3px); } }
+@keyframes roll-down { from { transform: translateY(-0.4em); opacity: 0; filter: blur(3px); } }
 .figures .headline.empty { color: var(--tertiary); }
 .figures .headline.preselected { background: rgba(255, 138, 61, 0.22); border-radius: 10px; padding: 0 6px; }
 .date-line { display: flex; justify-content: flex-end; padding-bottom: 4px; }

@@ -715,7 +715,7 @@ function row(e, withDate = false) {
   const note = listNote(e);
   return `
     <div class="swipe ${state.flashId === e.id ? 'flash' : ''}" ${deletable ? `data-swipe="${e.id}"` : ''}>
-    ${deletable ? `<button class="swipe-delete" data-action="swipeDelete" data-id="${e.id}" tabindex="-1">${glyph('trash-2')}<span>刪除</span></button>` : ''}
+    ${deletable ? `<button class="swipe-delete" data-action="swipeDelete" data-id="${e.id}" tabindex="-1" aria-label="刪除">${glyph('trash-2')}</button>` : ''}
     <button class="row" data-action="open" data-id="${e.id}">
       <span class="icon" style="background:${c.color}14;border:1px solid ${c.color}29;color:${c.color}">${glyph(c.icon)}</span>
       <span class="main">
@@ -1165,11 +1165,37 @@ function renderEntry() {
   if (d.addingSub) sheetRoot.querySelector('#newSub')?.focus();
 }
 
-// A long amount shrinks to fit beside the currency, down to 40% as in the app
+// A long amount shrinks to fit beside the currency, down to 40% as in the
+// app, easing from the size it had
 function fitHeadline(headline) {
+  const before = headline.style.fontSize;
+  headline.style.transition = 'none';
   headline.style.fontSize = '';
   const room = headline.parentElement.clientWidth - 16, wide = headline.scrollWidth;
-  if (room > 0 && wide > room) headline.style.fontSize = `${Math.max(54 * 0.4, Math.floor(54 * room / wide))}px`;
+  const target = room > 0 && wide > room ? `${Math.max(54 * 0.4, Math.floor(54 * room / wide))}px` : '';
+  headline.style.fontSize = before;
+  headline.getBoundingClientRect();
+  headline.style.transition = '';
+  headline.style.fontSize = target;
+}
+
+// Like the app's numericText: what changed after the unchanged beginning
+// rolls in (up as the number grows, down as it shrinks); the rest stays put
+function rollText(el, text) {
+  const old = el.dataset.text ?? '';
+  if (old === text) return;
+  el.dataset.text = text;
+  if (reduceMotion.matches || !old) { el.textContent = text; return; }
+  const down = text.length < old.length || (text.length === old.length && text < old);
+  // Compared without the thousands commas, which move as digits are typed
+  const bare = text.replaceAll(',', ''), oldBare = old.replaceAll(',', '');
+  let keep = 0, same = 0;
+  while (keep < bare.length && bare[keep] === oldBare[keep]) keep++;
+  for (let seen = 0; same < text.length && (text[same] === ',' || seen < keep); same++) if (text[same] !== ',') seen++;
+  const span = document.createElement('span');
+  span.className = down ? 'roll down' : 'roll';
+  span.textContent = text.slice(same);
+  el.replaceChildren(text.slice(0, same), span);
 }
 
 // What a key changes: the figures, 我的份 and the buttons' titles
@@ -1177,7 +1203,7 @@ function updateAmount() {
   const d = draft, total = draftTotal(), a = amounts(total, d), next = missing();
   const q = id => sheetRoot.querySelector(id);
   const headline = q('#headline');
-  headline.textContent = calcHeadline(d.calc);
+  rollText(headline, calcHeadline(d.calc));
   headline.classList.toggle('empty', calcEmpty(d.calc));
   headline.classList.toggle('preselected', d.calc.preselected);
   fitHeadline(headline);
@@ -1496,15 +1522,14 @@ async function saveSettle() {
 
 // ---------- Swipe to delete ----------
 
-const DELETE_WIDTH = 88;
+const DELETE_WIDTH = 72;
 let swipe = null, openSwipe = null, swipedAt = 0;
 
 function setSwipe(wrap, offset, animated) {
   const rowEl = wrap.querySelector('.row');
   rowEl.style.transition = animated ? 'transform 0.4s var(--spring)' : 'none';
   rowEl.style.transform = offset ? `translateX(${offset}px)` : '';
-  wrap.style.setProperty('--reveal', `${-offset}px`);
-  wrap.classList.toggle('revealing', offset < 0);
+  wrap.style.setProperty('--reveal-fade', Math.min(1, -offset / DELETE_WIDTH));
   wrap.classList.toggle('animated', animated);
 }
 
