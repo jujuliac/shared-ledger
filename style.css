@@ -30,6 +30,9 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* A quick 0 0 on the keypad zoomed the page in (Erik, 2026-11-02): no
+   double-tap zoom anywhere; pinch still works */
+html, button { touch-action: manipulation; }
 html, body {
   margin: 0;
   background: var(--base);
@@ -120,7 +123,7 @@ input, textarea { font: inherit; color: var(--text); }
 .tile.link { flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0 22px; font-size: 17px; font-weight: 600; color: var(--text); }
 /* Grey, so the one icon in the row doesn't pull the eye */
 .tile.link .glyph { color: var(--secondary); width: 22px; height: 22px; }
-.tile .label { font-size: 13px; color: var(--secondary); }
+.tile .label { font-size: 13px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .value { font-size: 18px; font-weight: 600; margin-top: 4px; }
 
 .notice { margin-top: 10px; font-size: 13px; color: #ffb86b; text-align: center; }
@@ -509,5 +512,6 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .row.change.deleted:disabled { opacity: 1; }
 .changes-tile { text-align: left; color: var(--text); }
 .changes-tile .label-line { display: flex; align-items: baseline; gap: 6px; }
+.changes-tile .label-line .label { min-width: 0; }
 .changes-tile .fresh { margin-left: auto; flex: none; font-size: 13px; color: var(--accent); }
 .changes-tile .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

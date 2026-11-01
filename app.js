@@ -517,6 +517,13 @@ function render() {
       </div>` : ''}
 `;
   state.flashId = null;
+  fitBalance();
+}
+
+// A long balance shrinks to stay whole beside 結清 ›, like the app's, rather than cut to 2,67…
+function fitBalance() {
+  const value = app.querySelector('.balance-tile .value');
+  for (let size = 18; value && size > 12 && value.scrollWidth > value.clientWidth; size--) value.style.fontSize = `${size - 1}px`;
 }
 
 // 本月 or the whole ledger; a trip starts whole, the household by month
