@@ -1153,6 +1153,7 @@ function renderEntry() {
         <span class="row-title">備註</span>
         <input type="text" placeholder="選填" value="${escape(d.note)}" data-field="note" enterkeyhint="done">
       </label>
+      ${d.saved && stampOf(d.saved) ? `<div class="entry-stamp">${escape(stampOf(d.saved))}</div>` : ''}
     </div>
 
     <div class="grow"></div>
@@ -1242,7 +1243,28 @@ async function saveEntry() {
   await commit(row, d.isNew, `已記共用 ${row.name || CATEGORIES[d.category].title} ${fmt(total, draftCode())}`);
 }
 
+// One line, as in the app: when and by whom it was last changed, or else
+// first written. Imports and clean-ups done straight in the database have
+// no editor and don't count as edits.
+function stampOf(entry) {
+  const created = entry.created_at && new Date(entry.created_at), updated = entry.updated_at && new Date(entry.updated_at);
+  if (updated && entry.updated_by && updated - (created || 0) > 5000) return `修改 ${stamp(updated)} · ${nameOf(entry.updated_by)}`;
+  if (!created) return null;
+  return entry.created_by ? `建立 ${stamp(created)} · ${nameOf(entry.created_by)}` : `建立 ${stamp(created)}`;
+}
+
+// 11/1 11:02, with the year when it isn't this year
+function stamp(date) {
+  const day = `${date.getMonth() + 1}/${date.getDate()}`;
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return `${date.getFullYear() === new Date().getFullYear() ? day : `${date.getFullYear()}/${day}`} ${time}`;
+}
+
+// Opening and saving as is isn't an edit: nothing is written, so 修改 stays as it was
+const unchanged = (row, saved) => saved && Object.keys(row).every(k => (row[k] ?? null) === (saved[k] ?? null));
+
 async function commit(row, isNew, message) {
+  if (!isNew && unchanged(row, draft?.saved)) { closeSheet(); return; }
   const save = sheetRoot.querySelector('#save, #keyAction');
   const title = save?.textContent;
   if (save) { save.disabled = true; save.textContent = '儲存中…'; }
@@ -1718,6 +1740,7 @@ function sampleEntries() {
     id: crypto.randomUUID(), kind: 'expense', name, category, date: day(offset), amount_cents: total, note: null,
     julia_paid_cents: juliaPaid ? total : 0, erik_paid_cents: juliaPaid ? 0 : total,
     julia_share_cents: juliaShare, erik_share_cents: total - juliaShare, created_at: new Date().toISOString(),
+    ledger_id: HOUSEHOLD, currency: 'TWD', twd_estimated: false,
   });
   // A trip in yen: cash at the exchange rate, a card and a Suica still guessed
   const trip = (name, category, offset, yen, twd, payment, juliaPaid = true, ledger = SAMPLE_TOKYO.id) => ({
@@ -1727,7 +1750,9 @@ function sampleEntries() {
   });
   const osaka = (name, category, offset, yen, twd) => ({ ...trip(name, category, offset, yen, twd, 'card', true, SAMPLE_OSAKA.id), twd_estimated: false });
   return [
-    { ...e('晚餐', 'dining', 0, 143400), note: '鐵板燒' }, e('PX', 'grocery', 1, 54500), e('咖啡', 'dining', 3, 54000, false),
+    // Written a while ago and since changed by the other one, for 建立／修改
+    { ...e('晚餐', 'dining', 0, 143400), note: '鐵板燒', created_by: 'julia', created_at: new Date(Date.now() - 3 * 3600e3).toISOString(),
+      updated_by: 'erik', updated_at: new Date(Date.now() - 600e3).toISOString() }, e('PX', 'grocery', 1, 54500), e('咖啡', 'dining', 3, 54000, false),
     e('飲料', 'dining', 3, 11500), e('網路', 'bill', 5, 79900), { ...e('家用品', 'grocery', 6, 137000), note: '滑鼠' },
     e('Taxi', 'transport', 9, 42500, false, 42500), e('電影', 'entertainment', 12, 61000),
     { ...trip('拉麵', 'dining', 1, 2400, 51000, 'cash'), note: '一蘭' }, trip('Suica', 'transport', 1, 680, 14500, 'suica'),

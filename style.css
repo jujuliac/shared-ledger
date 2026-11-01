@@ -488,3 +488,6 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .confirm-toggle .glyph { width: 14px; height: 14px; }
 .confirm-toggle.on { color: var(--accent); }
 #twdInput.missing::placeholder { color: var(--negative); }
+
+/* 建立／修改 under the note, as in the app */
+.entry-stamp { text-align: right; font-size: 13px; color: var(--tertiary); font-variant-numeric: tabular-nums; padding-top: 12px; }
