@@ -1009,6 +1009,13 @@ function dragToDismiss(sheet) {
 // in a card from the bottom. Starts as 我付・平分.
 let draft = null, shownPanel = null;
 
+// Today, or the last day of an earlier month being looked at (Erik, 2026-11-02)
+function newEntryDate() {
+  if (wholeTotals() || state.month >= monthKey(today())) return today();
+  const [y, m] = state.month.split('-').map(Number);
+  return `${state.month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+
 function openEntry(entry) {
   if (entry?.kind === 'income') { toast('收入紀錄請在 App 裡修改'); return; }
   if (entry?.kind === 'settlement') { openSettle(entry); return; }
@@ -1022,7 +1029,7 @@ function openEntry(entry) {
     payment: entry.payment_method ?? lastPayment(entry.ledger_id ?? HOUSEHOLD),
     twdText: '', twdConfirmed: !entry.twd_estimated,
   } : {
-    id: crypto.randomUUID(), isNew: true, calc: calcOf(), panel: 'amount', date: today(),
+    id: crypto.randomUUID(), isNew: true, calc: calcOf(), panel: 'amount', date: newEntryDate(),
     category: null, name: '', addingSub: false, note: '', keepNote: null,
     payer: 'me', minePaidText: '', division: 'equal', myShareText: '',
     // An archived ledger is for looking back at; new records never go there
@@ -1138,6 +1145,8 @@ function calendar() {
     const key = `${d.calMonth}-${String(day).padStart(2, '0')}`;
     cells.push(`<button class="day ${key === d.date ? 'on' : ''} ${key === now ? 'today' : ''}" data-action="day" data-value="${key}">${day}</button>`);
   }
+  // Always six weeks, like the app's calendar, so the panel keeps its height between months
+  while (cells.length < 42) cells.push('<span class="day blank"></span>');
   return `
     <div class="calendar">
       <div class="cal-head">
