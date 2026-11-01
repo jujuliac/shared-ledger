@@ -794,9 +794,9 @@ function calcHeadline(c) {
   return current === '' ? '0' : grouped(current);
 }
 
-const calcExpression = c => (c.ops.length
-  ? c.numbers.map((n, i) => (n === '' ? '' : grouped(n)) + (c.ops[i] ? ` ${c.ops[i]} ` : '')).join('')
-  : '');
+// As in the app: the numbers before the one being typed, each with its
+// operator; the one being typed is the big figure underneath
+const calcExpression = c => c.ops.map((op, i) => `${c.numbers[i] === '' ? '' : grouped(c.numbers[i])} ${op}`).join(' ');
 
 const KEYS = [
   ['÷', '×', '−', '+'],
@@ -1165,6 +1165,16 @@ function renderEntry() {
   if (d.addingSub) sheetRoot.querySelector('#newSub')?.focus();
 }
 
+// The sum above the amount: smaller when long (to 60%, as in the app), and
+// past that it keeps the end, where typing happens
+function fitExpression(el, text) {
+  el.style.fontSize = '';
+  el.textContent = text;
+  if (el.scrollWidth <= el.clientWidth) return;
+  el.style.fontSize = `${Math.max(14 * 0.6, 14 * el.clientWidth / el.scrollWidth)}px`;
+  for (let cut = 1; el.scrollWidth > el.clientWidth && cut < text.length; cut++) el.textContent = '…' + text.slice(cut);
+}
+
 // A long amount shrinks to fit beside the currency, down to 40% as in the
 // app, easing from the size it had
 function fitHeadline(headline) {
@@ -1213,9 +1223,9 @@ function updateAmount() {
   headline.classList.toggle('empty', calcEmpty(d.calc));
   headline.classList.toggle('preselected', d.calc.preselected);
   fitHeadline(headline);
-  q('#expression').textContent = calcExpression(d.calc) || ' ';
+  fitExpression(q('#expression'), calcExpression(d.calc) || ' ');
   const code = draftCode();
-  q('#myShare').textContent = a && total > 0 ? `我的份 ${fmt(a.myShare, code)}` : '';
+  q('#myShare').textContent = a && total > 0 ? `我的份 ${currencySign(code)}${money(a.myShare)}` : '';
   const note = q('#divisionNote');
   if (note) {
     note.className = 'picker-note num' + (total > 0 && !a ? ' error' : '');
