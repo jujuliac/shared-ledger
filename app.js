@@ -45,6 +45,10 @@ const state = {
   names: { julia: 'Julia', erik: 'Erik' },
   entries: [], // not deleted, the ledger on screen, newest first
   allEntries: [], // not deleted, every ledger
+  allRows: [], // every ledger, deleted ones too, for 最近更新
+  // When 最近更新 was last looked at; the other one's changes after it are 新.
+  // Never looked yet: only the last two days count, not every old import.
+  changesSeen: stored('changesSeen') ?? new Date(Date.now() - 2 * 86400e3).toISOString(),
   ledgers: [HOUSEHOLD_FALLBACK], // household first, then trips oldest first
   ledgerId: stored('sharedLedger') ?? HOUSEHOLD, // the one on screen and new records go to
   whole: null, // the two totals: true 全程／全部, false 本月, null the ledger's default
@@ -256,14 +260,14 @@ async function loadEntries() {
   const all = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db.from('shared_entries').select('*')
-      .is('deleted_at', null)
       .order('date', { ascending: false }).order('created_at', { ascending: false })
       .range(from, from + 999);
     if (error) throw error;
     all.push(...data);
     if (data.length < 1000) break;
   }
-  state.allEntries = all;
+  state.allRows = all;
+  state.allEntries = all.filter(e => !e.deleted_at);
   pickLedger();
 }
 
@@ -308,10 +312,12 @@ async function refresh() {
 
 async function saveRow(row, isNew) {
   if (sample) {
-    const index = state.allEntries.findIndex(e => e.id === row.id);
-    if (row.deleted_at) state.allEntries.splice(index, 1);
-    else if (index >= 0) state.allEntries[index] = { ...state.allEntries[index], ...row };
-    else state.allEntries.unshift({ ...row, created_by: state.me, created_at: new Date().toISOString() });
+    // Stamped the way the server's trigger would
+    const now = new Date().toISOString();
+    const index = state.allRows.findIndex(e => e.id === row.id);
+    if (index >= 0) state.allRows[index] = { ...state.allRows[index], ...row, updated_by: state.me, updated_at: now };
+    else state.allRows.unshift({ ...row, created_by: state.me, created_at: now });
+    state.allEntries = state.allRows.filter(e => !e.deleted_at);
     pickLedger();
     return;
   }
@@ -441,6 +447,7 @@ function render() {
 
   if (state.view === 'stats') { renderStats(); return; }
   if (state.view === 'category') { renderCategory(); return; }
+  if (state.view === 'changes') { renderChanges(); return; }
 
   const key = state.month;
   const [year, month] = key.split('-').map(Number);
@@ -496,6 +503,7 @@ function render() {
 
       ${installHint()}
       ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
+      ${whole || isCurrent ? recentChanges() : ''}
       ${days.size === 0 ? `<p class="empty">${whole ? '還沒有共用支出' : '這個月還沒有共用支出'}</p>` : ''}
       ${[...days.entries()].map(([day, rows]) => dayBlock(day, rows)).join('')}
     </div>
@@ -658,6 +666,7 @@ function go(view) {
 let backByButton = false;
 window.addEventListener('popstate', event => {
   const update = () => {
+    if (state.view === 'changes') markChangesSeen();
     state.view = event.state?.view ?? 'list';
     state.statsCategory = event.state?.statsCategory ?? null;
     render();
@@ -695,6 +704,85 @@ document.addEventListener('touchend', () => {
     if (back) { history.back(); requestAnimationFrame(() => { app.style.transform = ''; }); }
   }, reduceMotion.matches ? 0 : 300);
 });
+
+// ---------- 最近更新 ----------
+
+// Each record by its latest change: who added, changed or deleted it and
+// when, newest first. Imported records carry no one's name and are left out.
+function changes() {
+  const list = [];
+  for (const e of state.allRows) {
+    const created = e.created_at && new Date(e.created_at), updated = e.updated_at && new Date(e.updated_at);
+    let change = null;
+    if (e.deleted_at && e.updated_by) change = { action: 'deleted', by: e.updated_by, at: updated ?? new Date(e.deleted_at) };
+    else if (updated && e.updated_by && updated - (created || 0) > 5000) change = { action: 'edited', by: e.updated_by, at: updated };
+    else if (created && e.created_by) change = { action: 'added', by: e.created_by, at: created };
+    if (change) list.push({ ...change, entry: e });
+  }
+  return list.sort((a, b) => b.at - a.at);
+}
+
+const isNewChange = c => c.by !== state.me && c.at > new Date(state.changesSeen);
+
+function markChangesSeen() {
+  const latest = changes()[0]?.at;
+  if (!latest || latest <= new Date(state.changesSeen)) return;
+  state.changesSeen = latest.toISOString();
+  if (!sample) store('changesSeen', state.changesSeen);
+}
+
+// Written more than a week after the day it's for, like a March dinner added in November
+function isBackdated(c) {
+  const written = new Date(c.at.toLocaleDateString('sv-SE', { timeZone: TIME_ZONE }) + 'T00:00:00Z');
+  return (written - new Date(c.entry.date + 'T00:00:00Z')) / 86400e3 > 7;
+}
+
+const entryDay = date => {
+  const [y, m, d] = date.split('-').map(Number);
+  return y === new Date().getFullYear() ? `${m}/${d}` : `${y}/${m}/${d}`;
+};
+
+function changeRow(c) {
+  const e = c.entry, cat = CATEGORIES[e.category] ?? CATEGORIES.other;
+  const deleted = c.action === 'deleted';
+  const color = deleted ? 'var(--tertiary)' : cat.color;
+  const what = `${nameOf(c.by)} ${{ added: '新增', edited: '修改', deleted: '刪除' }[c.action]}`;
+  const ledgerId = e.ledger_id ?? HOUSEHOLD;
+  const by = [what, stamp(c.at), ...(ledgerId !== state.ledgerId ? [ledgerOf(ledgerId).name] : [])].join(' · ');
+  return `
+    <button class="row change ${deleted ? 'deleted' : ''}" ${deleted ? 'disabled' : `data-action="openChange" data-id="${e.id}"`}>
+      <span class="icon" style="background:${deleted ? 'rgba(141,147,166,0.07)' : cat.color + '14'};border:1px solid ${deleted ? 'rgba(141,147,166,0.16)' : cat.color + '29'};color:${color}">${glyph(cat.icon)}</span>
+      <span class="main">
+        <div class="title"><span class="name">${escape(e.name || cat.title)}</span>${isNewChange(c) ? '<span class="new-badge">新</span>' : ''}</div>
+        <div class="detail by num">${escape(by)}</div>
+      </span>
+      <span class="right">
+        <div class="total num">${e.twd_estimated ? '≈ ' : ''}${money(e.amount_cents)}</div>
+        <div class="share num">${isBackdated(c) ? '<span class="backdated">補記</span> ' : ''}${entryDay(e.date)}</div>
+      </span>
+    </button>`;
+}
+
+// The latest three by either of us, 全部 › for the rest
+function recentChanges() {
+  const list = changes();
+  if (!list.length) return '';
+  const fresh = list.filter(isNewChange).length;
+  return `
+    <div class="day-head">
+      <span class="word">最近更新</span>${fresh ? `<span class="fresh">${fresh} 筆新的</span>` : ''}
+      <span class="spacer"></span>
+      <button class="see-all" data-action="changes">全部 ›</button>
+    </div>
+    <div class="card rows">${list.slice(0, 3).map(changeRow).join('')}</div>`;
+}
+
+function renderChanges() {
+  app.innerHTML = `
+    ${topBar('最近更新')}
+    <div class="card rows">${changes().slice(0, 200).map(changeRow).join('')}</div>
+    <p class="footnote">匯入的舊紀錄沒有記錄是誰寫的，不會列在這裡</p>`;
+}
 
 function dayBlock(day, rows) {
   const { word, short } = dayLabel(day);
@@ -1627,7 +1715,7 @@ document.addEventListener('click', async event => {
       break;
     case 'signOut':
       if (!sample) await db.auth.signOut();
-      state.status = 'signedOut'; state.entries = []; state.allEntries = []; render();
+      state.status = 'signedOut'; state.entries = []; state.allEntries = []; state.allRows = []; render();
       break;
     case 'refresh': await refresh(); toast('已更新'); break;
     case 'menu': state.menuOpen = !state.menuOpen; render(); break;
@@ -1667,6 +1755,8 @@ document.addEventListener('click', async event => {
     case 'sort': state.byAmount = !state.byAmount; render(); break;
     case 'back': backByButton = true; history.back(); break;
     case 'open': openEntry(state.entries.find(e => e.id === target.dataset.id)); break;
+    case 'changes': go('changes'); break;
+    case 'openChange': openEntry(state.allEntries.find(e => e.id === target.dataset.id)); break;
     case 'swipeDelete': openSwipe = null; await removeEntry(target.dataset.id); break;
     case 'settle': openSettle(null); break;
     case 'close': requestClose(); break;
@@ -1763,6 +1853,7 @@ document.addEventListener('focusin', event => {
 
 // Coming back to the page picks up what Julia added meanwhile
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && state.status === 'ready' && state.view === 'list') markChangesSeen();
   if (document.visibilityState === 'visible' && state.status === 'ready' && !draft && !settle) refresh();
 });
 
@@ -1788,7 +1879,8 @@ function sampleEntries() {
   const e = (name, category, offset, total, juliaPaid = true, juliaShare = Math.floor(total / 2)) => ({
     id: crypto.randomUUID(), kind: 'expense', name, category, date: day(offset), amount_cents: total, note: null,
     julia_paid_cents: juliaPaid ? total : 0, erik_paid_cents: juliaPaid ? 0 : total,
-    julia_share_cents: juliaShare, erik_share_cents: total - juliaShare, created_at: new Date().toISOString(),
+    julia_share_cents: juliaShare, erik_share_cents: total - juliaShare,
+    created_by: juliaPaid ? 'julia' : 'erik', created_at: new Date(Date.now() - offset * 86400e3).toISOString(),
     ledger_id: HOUSEHOLD, currency: 'TWD', twd_estimated: false,
   });
   // A trip in yen: cash at the exchange rate, a card and a Suica still guessed
@@ -1799,6 +1891,10 @@ function sampleEntries() {
   });
   const osaka = (name, category, offset, yen, twd) => ({ ...trip(name, category, offset, yen, twd, 'card', true, SAMPLE_OSAKA.id), twd_estimated: false });
   return [
+    // Julia's latest: a dinner from weeks ago added just now (補記), and a coffee she took back
+    { ...e('火鍋', 'dining', 40, 186000), created_at: new Date(Date.now() - 25 * 60e3).toISOString() },
+    { ...e('咖啡豆', 'grocery', 2, 45000), deleted_at: new Date(Date.now() - 5 * 3600e3).toISOString(),
+      updated_by: 'julia', updated_at: new Date(Date.now() - 5 * 3600e3).toISOString() },
     // Written a while ago and since changed by the other one, for 建立／修改
     { ...e('晚餐', 'dining', 0, 143400), note: '鐵板燒', created_by: 'julia', created_at: new Date(Date.now() - 3 * 3600e3).toISOString(),
       updated_by: 'erik', updated_at: new Date(Date.now() - 600e3).toISOString() }, e('PX', 'grocery', 1, 54500), e('咖啡', 'dining', 3, 54000, false),
@@ -1819,7 +1915,9 @@ if (sample) {
   state.me = 'erik';
   state.email = 'erik@example.com';
   setLedgers([HOUSEHOLD_FALLBACK, SAMPLE_OSAKA, SAMPLE_TOKYO]);
-  state.allEntries = sampleEntries();
+  state.allRows = sampleEntries();
+  state.allEntries = state.allRows.filter(e => !e.deleted_at);
+  state.changesSeen = new Date(Date.now() - 3600e3).toISOString();
   await loadMarket();
   pickLedger();
   state.status = 'ready';
