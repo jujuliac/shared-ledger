@@ -495,8 +495,6 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .entry-stamp { text-align: right; font-size: 13px; color: var(--tertiary); font-variant-numeric: tabular-nums; padding-top: 12px; }
 
 /* 最近更新 */
-.day-head .fresh { font-size: 15px; color: var(--accent); }
-.day-head .see-all { font-size: 15px; color: var(--secondary); padding: 6px 0 6px 12px; }
 .row.change .title { display: flex; align-items: center; gap: 6px; }
 .row.change .title .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .row.change .by { color: var(--tertiary); }
@@ -508,3 +506,4 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .footnote { font-size: 13px; color: var(--tertiary); margin: 10px 4px 0; }
 
 .row.change.deleted:disabled { opacity: 1; }
+.new-count { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--base); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }

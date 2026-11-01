@@ -499,11 +499,11 @@ function render() {
         <div class="card tile"><div class="label">${totalTitle}</div><div class="value num">${money(spending.reduce((s, e) => s + e.amount_cents, 0))}</div></div>
         ${balanceTile()}
         <button class="card tile link" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}<span>分類</span></button>
+        ${changesTile()}
       </section>
 
       ${installHint()}
       ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
-      ${whole || isCurrent ? recentChanges() : ''}
       ${days.size === 0 ? `<p class="empty">${whole ? '還沒有共用支出' : '這個月還沒有共用支出'}</p>` : ''}
       ${[...days.entries()].map(([day, rows]) => dayBlock(day, rows)).join('')}
     </div>
@@ -763,18 +763,13 @@ function changeRow(c) {
     </button>`;
 }
 
-// The latest three by either of us, 全部 › for the rest
-function recentChanges() {
+// The way into 最近更新, its own page, last in the row like 分類, with how
+// many of the other one's changes are new
+function changesTile() {
   const list = changes();
   if (!list.length) return '';
   const fresh = list.filter(isNewChange).length;
-  return `
-    <div class="day-head">
-      <span class="word">最近更新</span>${fresh ? `<span class="fresh">${fresh} 筆新的</span>` : ''}
-      <span class="spacer"></span>
-      <button class="see-all" data-action="changes">全部 ›</button>
-    </div>
-    <div class="card rows">${list.slice(0, 3).map(changeRow).join('')}</div>`;
+  return `<button class="card tile link" data-action="changes" aria-label="最近更新${fresh ? `，${fresh} 筆新的` : ''}">${glyph('history')}<span>最近更新</span>${fresh ? `<span class="new-count num">${fresh}</span>` : ''}</button>`;
 }
 
 function renderChanges() {
@@ -1853,7 +1848,6 @@ document.addEventListener('focusin', event => {
 
 // Coming back to the page picks up what Julia added meanwhile
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && state.status === 'ready' && state.view === 'list') markChangesSeen();
   if (document.visibilityState === 'visible' && state.status === 'ready' && !draft && !settle) refresh();
 });
 
