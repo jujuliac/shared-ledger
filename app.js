@@ -397,20 +397,24 @@ function installHint() {
     </div>`;
 }
 
-// The balance counts to its new figure instead of jumping
-let shownBalance = null;
-function tweenBalance(b) {
-  const el = app.querySelector('.balance .amount');
-  const from = shownBalance;
-  shownBalance = b;
-  if (!el || from === null || from === b || reduceMotion.matches) return;
-  const start = performance.now();
-  const step = now => {
-    const t = Math.min((now - start) / 550, 1), eased = 1 - Math.pow(1 - t, 3);
-    el.textContent = `NT$ ${money(Math.abs(Math.round(from + (b - from) * eased)))}`;
-    if (t < 1 && el.isConnected) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+// A month's figures count to their new value instead of jumping (Julia,
+// 2026-11-02): the tiles stay put, only their numbers change
+const shownFigures = new Map();
+function tweenFigures() {
+  for (const el of app.querySelectorAll('[data-figure]')) {
+    const key = el.dataset.figure, to = Number(el.dataset.cents), from = shownFigures.get(key);
+    shownFigures.set(key, to);
+    if (from === undefined || from === to || reduceMotion.matches) continue;
+    const start = performance.now();
+    const step = now => {
+      const t = Math.min((now - start) / 450, 1), eased = 1 - Math.pow(1 - t, 3);
+      // Whole dollars on the way, so the cents don't flicker
+      el.textContent = money(t < 1 ? Math.round((from + (to - from) * eased) / 100) * 100 : to);
+      if (t < 1 && el.isConnected) requestAnimationFrame(step);
+    };
+    el.textContent = money(from);
+    requestAnimationFrame(step);
+  }
 }
 
 // The header gets its frosted background once the page scrolls under it
@@ -477,6 +481,8 @@ function render() {
         <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>${glyph('chevron-right')}</button>
       </div>
       ${isCurrent ? '' : '<button class="today-button" data-action="thisMonth">今天</button>'}`;
+  // The tiles stay scrolled where they were, across months and saves
+  const tilesLeft = app.querySelector('.tiles')?.scrollLeft ?? 0;
   app.innerHTML = `
     <header class="header sticky">
       ${head}
@@ -494,15 +500,15 @@ function render() {
       </button>
     </div>
 
-    <div class="month-body">
-      <section class="tiles">
-        <div class="card tile"><div class="label">${mineTitle}</div><div class="value num">${money(spending.reduce((s, e) => s + share(e, state.me), 0))}</div></div>
-        <div class="card tile"><div class="label">${totalTitle}</div><div class="value num">${money(spending.reduce((s, e) => s + e.amount_cents, 0))}</div></div>
+    <section class="tiles">
+        ${figureTile('mine', mineTitle, spending.reduce((s, e) => s + share(e, state.me), 0))}
+        ${figureTile('total', totalTitle, spending.reduce((s, e) => s + e.amount_cents, 0))}
         <button class="card tile link" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}<span>分類</span></button>
         ${balanceTile()}
         ${changesTile()}
-      </section>
+    </section>
 
+    <div class="month-body">
       ${installHint()}
       ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
       ${days.size === 0 ? `<p class="empty">${whole ? '還沒有共用支出' : '這個月還沒有共用支出'}</p>` : ''}
@@ -518,8 +524,13 @@ function render() {
       </div>` : ''}
 `;
   state.flashId = null;
+  app.querySelector('.tiles')?.scrollTo(tilesLeft, 0);
   fitBalance();
+  tweenFigures();
 }
+
+const figureTile = (key, label, cents) =>
+  `<div class="card tile"><div class="label">${label}</div><div class="value num" data-figure="${key}" data-cents="${cents}">${money(cents)}</div></div>`;
 
 // A long balance shrinks to stay whole beside 結清 ›, like the app's, rather than cut to 2,67…
 function fitBalance() {
@@ -613,7 +624,7 @@ function renderStats() {
     ${totals.length === 0 ? `<p class="empty">${wholeTotals() ? '還沒有共用支出' : '這個月沒有共用支出'}</p>` : `
       <div class="donut">
         ${donut(totals, sum)}
-        <div class="center"><div class="value num">${money(sum)}</div>
+        <div class="center"><div class="value num" data-figure="stats" data-cents="${sum}">${money(sum)}</div>
           <div class="label">${state.basis === 'total' ? `共用 ${count} 筆` : '我的份'}</div></div>
       </div>
       <div class="card rows">
@@ -629,6 +640,7 @@ function renderStats() {
         }).join('')}
       </div>`}
     </div>`;
+  tweenFigures();
 }
 
 // In place of the month when the list or 共用分類 counts the whole ledger:
