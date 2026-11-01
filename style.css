@@ -231,8 +231,8 @@ input, textarea { font: inherit; color: var(--text); }
 .divider { height: 1px; background: rgba(255, 255, 255, 0.07); }
 .split-row { display: flex; align-items: center; gap: 8px; min-height: 52px; }
 .split-row .spacer { flex: 1; }
-.split-row .mine { font-size: 13px; color: var(--secondary); white-space: nowrap; }
-.split-chip { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 14px; border-radius: 999px; font-size: 15px; font-weight: 500; color: var(--text-soft); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); }
+.split-row .mine { font-size: 13px; color: var(--secondary); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.split-chip { flex: none; white-space: nowrap; display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 14px; border-radius: 999px; font-size: 15px; font-weight: 500; color: var(--text-soft); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); }
 .split-chip .glyph { width: 12px; height: 12px; }
 .split-chip.on { color: #fff; background: rgba(255, 138, 61, 0.35); border-color: var(--accent); }
 .form-row { display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%; text-align: left; font-size: 16px; }

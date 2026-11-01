@@ -1165,6 +1165,13 @@ function renderEntry() {
   if (d.addingSub) sheetRoot.querySelector('#newSub')?.focus();
 }
 
+// A long amount shrinks to fit beside the currency, down to 40% as in the app
+function fitHeadline(headline) {
+  headline.style.fontSize = '';
+  const room = headline.parentElement.clientWidth - 16, wide = headline.scrollWidth;
+  if (room > 0 && wide > room) headline.style.fontSize = `${Math.max(54 * 0.4, Math.floor(54 * room / wide))}px`;
+}
+
 // What a key changes: the figures, 我的份 and the buttons' titles
 function updateAmount() {
   const d = draft, total = draftTotal(), a = amounts(total, d), next = missing();
@@ -1173,6 +1180,7 @@ function updateAmount() {
   headline.textContent = calcHeadline(d.calc);
   headline.classList.toggle('empty', calcEmpty(d.calc));
   headline.classList.toggle('preselected', d.calc.preselected);
+  fitHeadline(headline);
   q('#expression').textContent = calcExpression(d.calc) || ' ';
   const code = draftCode();
   q('#myShare').textContent = a && total > 0 ? `我的份 ${fmt(a.myShare, code)}` : '';
