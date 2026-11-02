@@ -433,12 +433,18 @@ html[data-motion^="month"] .header .month { view-transition-name: month-label; }
 html[data-motion^="month"]::view-transition-old(root), html[data-motion^="month"]::view-transition-new(root) { animation: none; }
 ::view-transition-group(month-body), ::view-transition-group(month-label) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
 /* The old month is gone before the new one comes in: crossed, their rows read over each other */
-::view-transition-old(month-body), ::view-transition-old(month-label) { animation: 0.14s ease-in both month-out; }
-::view-transition-new(month-body), ::view-transition-new(month-label) { animation: 0.26s var(--ease) 0.1s both month-in; }
-html[data-motion="month-next"] { --from: 40px; --to: -40px; }
-html[data-motion="month-prev"] { --from: -40px; --to: 40px; }
-@keyframes month-in { from { transform: translateX(var(--from)); opacity: 0; } }
-@keyframes month-out { to { transform: translateX(var(--to)); opacity: 0; } }
+/* D of the demos (Julia, 2026-11-02): the list blurs away as the next comes
+   into focus, and the month name rolls up or down, like the app's */
+::view-transition-old(month-body) { animation: 0.2s ease-in both list-out; }
+::view-transition-new(month-body) { animation: 0.3s var(--ease) 0.06s both list-in; }
+::view-transition-old(month-label) { animation: 0.3s var(--ease) both label-out; }
+::view-transition-new(month-label) { animation: 0.36s var(--ease) 0.04s both label-in; }
+html[data-motion="month-next"] { --from: 60%; --to: -60%; }
+html[data-motion="month-prev"] { --from: -60%; --to: 60%; }
+@keyframes list-out { to { opacity: 0; filter: blur(4px); } }
+@keyframes list-in { from { opacity: 0; filter: blur(4px); transform: scale(0.985); } }
+@keyframes label-out { to { transform: translateY(var(--to)); opacity: 0; } }
+@keyframes label-in { from { transform: translateY(var(--from)); opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
@@ -554,3 +560,8 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .month-pull { position: fixed; left: 0; right: 0; top: 0; text-align: center;
   font-size: 13px; color: var(--secondary); opacity: 0; pointer-events: none; z-index: 6; }
 .month-pull.ready { color: var(--text); }
+
+/* A figure's characters, each in its own cell so a changed digit can roll */
+.roll-ch { position: relative; display: inline-block; }
+.roll-ch > span { display: inline-block; }
+.roll-ch > .out { position: absolute; left: 0; top: 0; }

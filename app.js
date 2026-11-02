@@ -397,23 +397,36 @@ function installHint() {
     </div>`;
 }
 
-// A month's figures count to their new value instead of jumping (Julia,
-// 2026-11-02): the tiles stay put, only their numbers change
+// A month's figures roll to their new value, the changed digits only, as
+// the app's numericText does (D of the demos, Julia 2026-11-02): higher
+// values come up from below, lower ones down from above; the tiles stay put
 const shownFigures = new Map();
 function tweenFigures() {
   for (const el of app.querySelectorAll('[data-figure]')) {
     const key = el.dataset.figure, to = Number(el.dataset.cents), from = shownFigures.get(key);
     shownFigures.set(key, to);
-    if (from === undefined || from === to || reduceMotion.matches) continue;
-    const start = performance.now();
-    const step = now => {
-      const t = Math.min((now - start) / 450, 1), eased = 1 - Math.pow(1 - t, 3);
-      // Whole dollars on the way, so the cents don't flicker
-      el.textContent = money(t < 1 ? Math.round((from + (to - from) * eased) / 100) * 100 : to);
-      if (t < 1 && el.isConnected) requestAnimationFrame(step);
-    };
-    el.textContent = money(from);
-    requestAnimationFrame(step);
+    if (from === undefined || from === to || reduceMotion.matches || !el.animate) continue;
+    const a = money(from), b = money(to), width = Math.max(a.length, b.length);
+    const before = a.padStart(width, ' '), after = b.padStart(width, ' ');
+    const up = to > from ? 1 : -1, ease = 'cubic-bezier(0.32, 0.72, 0, 1)';
+    el.textContent = '';
+    [...after].forEach((ch, i) => {
+      const cell = Object.assign(document.createElement('span'), { className: 'roll-ch' });
+      const next = Object.assign(document.createElement('span'), { textContent: ch.trim() });
+      cell.append(next);
+      el.append(cell);
+      if (before[i] === ch) return;
+      // The rightmost digits move first
+      const delay = (width - i) * 18;
+      if (before[i] !== ' ') {
+        const out = Object.assign(document.createElement('span'), { className: 'out', textContent: before[i] });
+        cell.append(out);
+        out.animate([{ transform: 'none', opacity: 1, filter: 'blur(0)' }, { transform: `translateY(${-up * 70}%)`, opacity: 0, filter: 'blur(2px)' }],
+          { duration: 320, easing: ease, delay, fill: 'forwards' }).finished.then(() => out.remove(), () => {});
+      }
+      next.animate([{ transform: `translateY(${up * 70}%)`, opacity: 0, filter: 'blur(2px)' }, { transform: 'none', opacity: 1, filter: 'blur(0)' }],
+        { duration: 380, easing: ease, delay: delay + 40, fill: 'backwards' });
+    });
   }
 }
 
