@@ -847,7 +847,7 @@ function changeRow(c) {
 }
 
 // The way into 最近更新: the latest change, with how many of the other
-// one's changes are new on a muted orange dot
+// one's changes are new on a muted orange dot beside 最近更新 ›
 function changesLine() {
   const list = changes();
   if (!list.length) return '';
@@ -855,8 +855,8 @@ function changesLine() {
   const cat = CATEGORIES[latest.entry.category] ?? CATEGORIES.other;
   const summary = `${nameOf(latest.by)} ${{ added: '新增', edited: '修改', deleted: '刪除' }[latest.action]} ${latest.entry.name || cat.title}`;
   return `<button class="line changes-line ${fresh ? 'fresh' : ''}" data-action="changes" aria-label="最近更新${fresh ? `，${fresh} 筆新的` : ''}：${escape(summary)}">
-    ${fresh ? `<span class="dot num" aria-hidden="true">${fresh}</span>` : ''}<span class="what">${escape(summary)}</span>
-    <span class="spacer"></span><span class="hint">最近更新 ›</span>
+    <span class="what">${escape(summary)}</span>
+    <span class="spacer"></span>${fresh ? `<span class="dot num" aria-hidden="true">${fresh}</span>` : ''}<span class="hint">最近更新 ›</span>
   </button>`;
 }
 

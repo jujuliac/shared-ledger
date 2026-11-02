@@ -428,6 +428,14 @@ button.field:active:not(:disabled) { transform: none; background: rgba(255, 255,
 
 /* Pages slide like the app's navigation; month changes slide the month's part */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.42s; animation-timing-function: var(--ease); }
+/* Each page slides as a solid sheet, like the app's push: without its own
+   background the page coming in let the one going out show through */
+html[data-motion="push"]::view-transition-new(root), html[data-motion="push"]::view-transition-old(root),
+html[data-motion="pop"]::view-transition-new(root), html[data-motion="pop"]::view-transition-old(root) {
+  background-color: var(--base); background-image: var(--screen-light);
+}
+html[data-motion="push"]::view-transition-new(root) { box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35); }
+html[data-motion="pop"]::view-transition-old(root) { box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35); }
 html[data-motion="push"]::view-transition-new(root) { animation-name: from-right; }
 html[data-motion="push"]::view-transition-old(root) { animation-name: to-left; }
 html[data-motion="pop"]::view-transition-new(root) { animation-name: from-left; }
