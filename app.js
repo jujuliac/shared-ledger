@@ -882,7 +882,7 @@ function renderChanges() {
         <div class="day-head">
           <span class="word">${word ?? short}</span>${word ? `<span class="date">· ${short}</span>` : ''}
         </div>
-        <div class="card rows">${list.map(changeRow).join('')}</div>`;
+        <div class="rows entry-rows">${list.map(changeRow).join('')}</div>`;
     }).join('')}
     <p class="footnote">匯入的舊紀錄沒有記錄是誰寫的，不會列在這裡</p>`;
 }
@@ -956,7 +956,7 @@ function dayBlock(day, rows) {
     <div class="day-head">
       <span class="word">${word ?? short}</span>${word ? `<span class="date">· ${short}</span>` : ''}
     </div>
-    <div class="card rows">${rows.map(e => row(e)).join('')}</div>`;
+    <div class="rows entry-rows">${rows.map(e => row(e)).join('')}</div>`;
 }
 
 // A record; swipe it left for 刪除, like the app's list

@@ -130,9 +130,9 @@ input, textarea { font: inherit; color: var(--text); }
 .month-top { padding-bottom: 0; }
 .tiles { display: flex; gap: 8px; margin-top: 10px; }
 /* A plain total, like the personal 明細's, its figure larger: spending is what this page is looked at for */
-.tile { flex: 1 1 0; min-width: 0; padding: 10px 12px; border-radius: 16px; }
+.tile { flex: 1 1 0; min-width: 0; padding: 8px 12px; border-radius: 14px; }
 .tile .label { font-size: 12px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile .value { font-size: 22px; font-weight: 600; margin-top: 2px; white-space: nowrap; }
+.tile .value { font-size: 20px; font-weight: 600; margin-top: 1px; white-space: nowrap; }
 
 /* Balance and the latest change: quiet one-line links under the tiles */
 .line { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 34px; font-size: 13px; color: var(--secondary); text-align: left; white-space: nowrap; }
@@ -156,6 +156,21 @@ input, textarea { font: inherit; color: var(--text); }
 .day-head .spacer { flex: 1; }
 .day-head .mine { font-size: 15px; color: var(--secondary); }
 .rows { padding: 4px 0; }
+/* Records by day, like the app's EntryList (明細 and 最近更新): rows straight
+   on the background, 54px high with 32px icons, split by hairlines that
+   start at the text, under a quiet 13px day title (Julia 2026-11-02) */
+.rows.entry-rows { padding: 0; }
+.rows.entry-rows .row { gap: 12px; padding: 7px 0; min-height: 54px; }
+.rows.entry-rows .row .icon { width: 32px; height: 32px; font-size: 14px; }
+.rows.entry-rows .row .icon .glyph { width: 15px; height: 15px; }
+.rows.entry-rows .row .title { font-size: 15px; }
+.rows.entry-rows .row .detail { margin-top: 1px; }
+.rows.entry-rows .row .total { font-size: 15px; }
+.rows.entry-rows .row .share { margin-top: 1px; }
+.rows.entry-rows > .swipe + .swipe, .rows.entry-rows > .row + .row { border-top: 0; background: linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08)) 44px 0 / calc(100% - 44px) 1px no-repeat; }
+.day-head:has(+ .entry-rows) { margin: 14px 0 2px; }
+.day-head:has(+ .entry-rows) .word { font-size: 13px; color: var(--text-soft); }
+.day-head:has(+ .entry-rows) .date { font-size: 13px; }
 /* Record lists are plain like the app's List rows: a flat faint fill, no
    glass gradient, edge or dividers (Julia 2026-11-02) */
 .card.rows { background: rgba(255, 255, 255, 0.06); border: none; box-shadow: none; border-radius: 26px; overflow: hidden; }
