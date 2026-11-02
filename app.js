@@ -1346,6 +1346,11 @@ function pickerCard() {
 function renderEntry() {
   const d = draft;
   const subs = d.category ? subcategories(d.category, d.ledgerId, draftCode()) : [];
+  // An opened record's own 子分類 leads, as in the app; keyed on what it was
+  // saved with, so tapping another chip doesn't move the row
+  const savedSub = d.saved?.category === d.category ? d.saved?.name : null;
+  const at = savedSub ? subs.findIndex(s => s.name === savedSub) : -1;
+  if (at > 0) subs.unshift(...subs.splice(at, 1));
   const ledger = draftLedger(), choices = activeLedgers();
   // Which ledger, under the title; a new record can go to another one
   const ledgerPick = d.isNew && choices.length > 1
