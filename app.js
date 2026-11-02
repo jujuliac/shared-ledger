@@ -473,6 +473,7 @@ function render() {
         <p>用綁定共用帳的 Google 帳號登入。<br>登入一次之後會記住。</p>
         ${!standalone && iOS ? '<p class="tertiary">先加到主畫面再登入：主畫面的 App 跟 Safari 分開記登入。</p>' : ''}
         <button class="primary" data-action="google">用 Google 登入</button>
+        <button class="link" data-action="trySample">先用範例資料看看</button>
         ${installHint()}
       </section>`;
     return;
@@ -1884,7 +1885,7 @@ function toThisMonth() {
 // The taps the app answers with Haptics.tap (or a save's thump, here the same tick)
 const TAP_HAPTICS = new Set(['prevMonth', 'nextMonth', 'thisMonth', 'ledgers', 'pickLedger', 'newTrip', 'tripSettings', 'saveLedger',
   'archiveLedger', 'scope', 'currency', 'payment', 'twdConfirm', 'stats', 'basis', 'statsCategory', 'sort', 'changes', 'swipeDelete',
-  'settle', 'key', 'panel', 'keyAction', 'primary', 'division', 'category', 'day', 'calMonth', 'sub', 'delete', 'saveSettle', 'menu']);
+  'settle', 'trySample', 'key', 'panel', 'keyAction', 'primary', 'division', 'category', 'day', 'calMonth', 'sub', 'delete', 'saveSettle', 'menu']);
 document.addEventListener('click', async event => {
   const target = event.target.closest('[data-action]');
   if (!target) { if (state.menuOpen) { state.menuOpen = false; render(); } return; }
@@ -1897,8 +1898,11 @@ document.addEventListener('click', async event => {
     case 'google':
       await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
       break;
+    // Made-up records, nothing saved; 登出 there comes back to the real sign-in
+    case 'trySample': location.href = `${location.pathname}?sample`; break;
     case 'signOut':
-      if (!sample) await db.auth.signOut();
+      if (sample) { location.href = location.pathname; break; }
+      await db.auth.signOut();
       state.status = 'signedOut'; state.entries = []; state.allEntries = []; state.allRows = []; render();
       break;
     case 'refresh': await refresh(); toast('已更新'); break;
