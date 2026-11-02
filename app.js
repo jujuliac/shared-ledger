@@ -377,6 +377,22 @@ function animate(kind, update) {
   t.finished.finally(() => { delete document.documentElement.dataset.motion; });
 }
 
+// The app's light tap under the finger. iPhone Safari has no
+// navigator.vibrate, but since iOS 18 a switch control ticks when it's
+// toggled during a tap (or a finger lifting), so a hidden one stands in;
+// elsewhere navigator.vibrate does it. It can't tick mid-drag or after a save
+// comes back, only at the touch itself.
+const hapticSwitch = document.createElement('label');
+hapticSwitch.setAttribute('aria-hidden', 'true');
+hapticSwitch.style.cssText = 'position:fixed;left:-100px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
+hapticSwitch.innerHTML = '<input type="checkbox" switch tabindex="-1">';
+// Its own clicks are not the page's taps
+hapticSwitch.addEventListener('click', event => event.stopPropagation());
+document.body.append(hapticSwitch);
+function haptic() {
+  if (navigator.vibrate && !iOS) navigator.vibrate(8); else hapticSwitch.click();
+}
+
 // Opened from the home screen it is a full-screen app; in Safari it's a page
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -926,7 +942,7 @@ document.addEventListener('touchend', () => {
   pull = null;
   pullNote.style.opacity = 0;
   if (!gap) return;
-  if (by && ready) { document.body.classList.remove('pulling'); changeMonth(by); return; }
+  if (by && ready) { haptic(); document.body.classList.remove('pulling'); changeMonth(by); return; }
   const moved = [...pulled(by)];
   for (const el of moved) { el.style.transition = 'transform 0.3s var(--ease)'; el.style.transform = ''; }
   setTimeout(() => {
@@ -1873,6 +1889,10 @@ function toThisMonth() {
   animate('month-next', () => { state.month = now; render(); scrollTo(0, 0); });
 }
 
+// The taps the app answers with Haptics.tap (or a save's thump, here the same tick)
+const TAP_HAPTICS = new Set(['prevMonth', 'nextMonth', 'thisMonth', 'ledgers', 'pickLedger', 'newTrip', 'tripSettings', 'saveLedger',
+  'archiveLedger', 'scope', 'currency', 'payment', 'twdConfirm', 'stats', 'basis', 'statsCategory', 'sort', 'changes', 'swipeDelete',
+  'settle', 'key', 'panel', 'keyAction', 'primary', 'division', 'category', 'day', 'calMonth', 'sub', 'delete', 'saveSettle', 'menu']);
 document.addEventListener('click', async event => {
   const target = event.target.closest('[data-action]');
   if (!target) { if (state.menuOpen) { state.menuOpen = false; render(); } return; }
@@ -1880,6 +1900,7 @@ document.addEventListener('click', async event => {
   if (action !== 'menu' && state.menuOpen) { state.menuOpen = false; render(); }
   // A tap that ends a swipe, or lands while a row is swiped open, only closes it
   if (action === 'open' && (Date.now() - swipedAt < 350 || openSwipe)) { closeOpenSwipe(); return; }
+  if (TAP_HAPTICS.has(action)) haptic();
   switch (action) {
     case 'google':
       await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
