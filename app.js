@@ -500,7 +500,6 @@ function render() {
   const whole = wholeTotals();
   const monthEntries = whole ? state.entries : state.entries.filter(e => e.date.startsWith(key));
   const spending = monthEntries.filter(e => e.kind === 'expense');
-  const [mineTitle, totalTitle] = whole ? (trip ? ['全程我的份', '全程共用'] : ['全部我的份', '全部共用']) : ['本月我的份', '本月共用'];
   const archived = !!ledger.archived_at;
 
   const days = new Map();
@@ -519,12 +518,11 @@ function render() {
         <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>${glyph('chevron-right')}</button>
       </div>
       ${isCurrent ? '' : '<button class="today-button" data-action="thisMonth">今天</button>'}`;
-  // The tiles stay scrolled where they were, across months and saves
-  const tilesLeft = app.querySelector('.tiles')?.scrollLeft ?? 0;
   app.innerHTML = `
     <header class="header sticky">
       ${head}
       ${whole ? '<div class="spacer"></div>' : ''}
+      <button class="round" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}</button>
       <button class="round" data-action="menu" aria-label="帳號" aria-expanded="${state.menuOpen}">${glyph('circle-user')}</button>
     </header>
 
@@ -538,12 +536,16 @@ function render() {
       </button>
     </div>
 
-    <section class="tiles">
-        ${figureTile('mine', mineTitle, spending.reduce((s, e) => s + share(e, state.me), 0))}
-        ${figureTile('total', totalTitle, spending.reduce((s, e) => s + e.amount_cents, 0))}
-        <button class="card tile link" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}<span>分類</span></button>
-        ${balanceTile()}
-        ${changesTile()}
+    <!-- What was spent comes first, in two big figures; the scope beside the
+         ledger's name covers both. Who owes whom and the latest change follow
+         as quiet lines, like the app's -->
+    <section class="month-summary">
+      <div class="tiles">
+        ${figureTile('total', '共用', spending.reduce((s, e) => s + e.amount_cents, 0))}
+        ${figureTile('mine', '我的份', spending.reduce((s, e) => s + share(e, state.me), 0))}
+      </div>
+      ${balanceLine()}
+      ${changesLine()}
     </section>
 
     <div class="month-body">
@@ -562,32 +564,23 @@ function render() {
       </div>` : ''}
 `;
   state.flashId = null;
-  app.querySelector('.tiles')?.scrollTo(tilesLeft, 0);
-  fitBalance();
   tweenFigures();
 }
 
 const figureTile = (key, label, cents) =>
   `<div class="card tile"><div class="label">${label}</div><div class="value num" data-figure="${key}" data-cents="${cents}">${money(cents)}</div></div>`;
 
-// A long balance shrinks to stay whole beside 結清 ›, like the app's, rather than cut to 2,67…
-function fitBalance() {
-  const value = app.querySelector('.balance-tile .value');
-  for (let size = 18; value && size > 12 && value.scrollWidth > value.clientWidth; size--) value.style.fontSize = `${size - 1}px`;
-}
-
 // 本月 or the whole ledger; a trip starts whole, the household by month
 const wholeTotals = () => state.whole ?? isTrip(currentLedger());
 
-// Who owes whom over the whole ledger, the same size as the totals and
-// never red (a big red figure felt like pressure); the whole tile opens 結清
-function balanceTile() {
+// Who owes whom over the whole ledger (目前, not this month's), a quiet line
+// under the totals, never red; it opens 結清
+function balanceLine() {
   const b = balance(), partner = partnerName(), estimated = estimatedCount();
   const label = b > 0 ? `目前 ${partner} 欠你` : b < 0 ? `目前你欠 ${partner}` : '目前兩清';
-  return `<button class="card tile balance-tile" data-action="settle" ${b === 0 ? 'disabled' : ''} aria-label="${escape(label)}${b ? '，點一下結清' : ''}">
-    <div class="label">${escape(label)}</div>
-    <div class="value-line"><span class="value num">${b === 0 ? '—' : (estimated ? '約 ' : '') + money(Math.abs(b))}</span>
-      ${b !== 0 ? '<span class="settle-hint">結清 ›</span>' : ''}</div>
+  return `<button class="line" data-action="settle" ${b === 0 ? 'disabled' : ''} aria-label="${escape(label)}${b ? ` ${money(Math.abs(b))}，點一下結清` : ''}">
+    <span>${escape(label)}</span>${b !== 0 ? `<span class="amount num">${estimated ? '約 ' : ''}${money(Math.abs(b))}</span>` : ''}
+    <span class="spacer"></span>${b !== 0 ? '<span class="hint">結清 ›</span>' : ''}
   </button>`;
 }
 
@@ -852,18 +845,17 @@ function changeRow(c) {
     </button>`;
 }
 
-// The way into 最近更新, its own page: laid out like the balance beside it,
-// a small title over the latest change, with how many of the other one's
-// changes are new
-function changesTile() {
+// The way into 最近更新: the latest change, with how many of the other
+// one's changes are new on a muted orange dot
+function changesLine() {
   const list = changes();
   if (!list.length) return '';
   const fresh = list.filter(isNewChange).length, latest = list[0];
   const cat = CATEGORIES[latest.entry.category] ?? CATEGORIES.other;
   const summary = `${nameOf(latest.by)} ${{ added: '新增', edited: '修改', deleted: '刪除' }[latest.action]} ${latest.entry.name || cat.title}`;
-  return `<button class="card tile changes-tile" data-action="changes" aria-label="最近更新${fresh ? `，${fresh} 筆新的` : ''}">
-    <div class="label-line"><span class="label">最近更新</span>${fresh ? `<span class="fresh num" aria-hidden="true">${fresh}</span>` : ''}</div>
-    <div class="value">${escape(summary)}</div>
+  return `<button class="line changes-line ${fresh ? 'fresh' : ''}" data-action="changes" aria-label="最近更新${fresh ? `，${fresh} 筆新的` : ''}：${escape(summary)}">
+    ${fresh ? `<span class="dot num" aria-hidden="true">${fresh}</span>` : ''}<span class="what">${escape(summary)}</span>
+    <span class="spacer"></span><span class="hint">最近更新 ›</span>
   </button>`;
 }
 
