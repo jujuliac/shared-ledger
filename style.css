@@ -155,9 +155,11 @@ input, textarea { font: inherit; color: var(--text); }
 .day-head .spacer { flex: 1; }
 .day-head .mine { font-size: 15px; color: var(--secondary); }
 .rows { padding: 4px 0; }
+/* Record lists are plain like the app's List rows: a flat faint fill, no
+   glass gradient, edge or dividers (Julia 2026-11-02) */
+.card.rows { background: rgba(255, 255, 255, 0.06); border: none; box-shadow: none; border-radius: 26px; overflow: hidden; }
 .row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 18px; min-height: 68px; text-align: left; }
 .rows .row .icon { width: 44px; height: 44px; }
-.rows > .row + .row, .swipe + .swipe { border-top: 1px solid rgba(255, 255, 255, 0.06); }
 
 /* Swipe a record left and a rounded 刪除 button opens up inside the card, as in the app */
 .swipe { position: relative; overflow: hidden; touch-action: pan-y; }
