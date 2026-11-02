@@ -46,12 +46,12 @@ html, body {
 body { min-height: 100dvh; background: transparent; }
 body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--screen-light); pointer-events: none; }
 /* Fine grain at the top, like the app */
-body::after, .sheet.entry::before {
+body::after, .sheet.entry::before, .top-fade::after {
   content: ""; position: fixed; left: 0; right: 0; top: 0; height: 220px; z-index: -1; pointer-events: none; opacity: 0.5;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.35 -0.12'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
   -webkit-mask: linear-gradient(#000, transparent); mask: linear-gradient(#000, transparent);
 }
-.sheet.entry::before { position: absolute; z-index: 0; }
+.sheet.entry::before, .top-fade::after { position: absolute; z-index: 0; }
 
 main {
   max-width: 520px;
@@ -60,23 +60,27 @@ main {
 }
 body.sheet-open { overflow: hidden; }
 
-/* The month header and the 共用分類 top bar stay on top, frosted once the
-   page scrolls under them */
+/* The month header and the 共用分類 top bar stay on top; what scrolls under
+   them fades out just below, like the app's TopEdgeFade */
 .sticky {
   position: sticky; top: 0; z-index: 5;
   margin: 0 calc(-1 * var(--gutter)); padding: calc(env(safe-area-inset-top) + 12px) var(--gutter) 10px;
-  transition: background-color 0.25s, border-color 0.25s;
-  border-bottom: 1px solid transparent;
 }
-body.scrolled .sticky {
-  background: rgba(8, 9, 14, 0.72); border-bottom-color: rgba(255, 255, 255, 0.06);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+/* The page's own background and grain, drawn again over the content and
+   masked to the header plus a soft band below it */
+.top-fade {
+  position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0; transition: opacity 0.2s;
+  -webkit-mask: linear-gradient(#000 var(--fade-top, 0px), transparent calc(var(--fade-top, 0px) + 36px));
+  mask: linear-gradient(#000 var(--fade-top, 0px), transparent calc(var(--fade-top, 0px) + 36px));
 }
+.top-fade::before { content: ""; position: absolute; inset: 0; background: var(--screen-light); }
+body.scrolled .top-fade { opacity: 1; }
+html { overscroll-behavior-y: none; }
 
 /* Press feedback: things shrink a touch under the finger and spring back */
 button { transition: transform 0.35s var(--spring), background-color 0.2s, color 0.2s, border-color 0.2s, opacity 0.2s; }
 button:active:not(:disabled) { transform: scale(0.96); transition-duration: 0.08s; }
-.row:active:not(:disabled) { transform: none; background: rgba(255, 255, 255, 0.05); }
+.row:active:not(:disabled) { transform: none; }
 .fab:active { transform: scale(0.9); }
 .key:active { transform: scale(0.94); }
 
@@ -354,10 +358,13 @@ button.field:active:not(:disabled) { transform: none; background: rgba(255, 255,
 .summary.error { color: var(--negative); }
 .sheet:not(.entry) .primary { margin-top: 16px; }
 
-.menu { position: fixed; right: max(var(--gutter), calc(50vw - 260px + var(--gutter))); top: calc(env(safe-area-inset-top) + 66px); z-index: 12; transform-origin: top right; animation: menu-in 0.3s var(--spring); min-width: 200px; background: #1b1e29; border: 1px solid var(--card-edge); border-radius: 16px; padding: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+/* The account menu, in the sheets' warm grey rather than a blue-grey */
+.menu { position: fixed; right: max(var(--gutter), calc(50vw - 260px + var(--gutter))); top: calc(env(safe-area-inset-top) + 66px); z-index: 12; transform-origin: top right; animation: menu-in 0.3s var(--spring); min-width: 220px; background: rgba(40, 33, 29, 0.9); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--card-edge); border-radius: 22px; padding: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
 @keyframes menu-in { from { transform: scale(0.85); opacity: 0; } }
 .menu .who { padding: 10px 12px; font-size: 13px; color: var(--secondary); }
-.menu button { display: block; width: 100%; text-align: left; padding: 12px; border-radius: 10px; font-size: 16px; }
+.menu button { display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; padding: 12px; border-radius: 14px; font-size: 17px; }
+.menu button .glyph { width: 18px; height: 18px; }
+.menu .who + button { border-top: 1px solid rgba(255, 255, 255, 0.06); border-radius: 0 0 14px 14px; }
 .menu button.danger { color: var(--negative); }
 
 .toast {
@@ -389,12 +396,19 @@ button.field:active:not(:disabled) { transform: none; background: rgba(255, 255,
 /* The light pill slides to the chosen side */
 .segment::before { content: ""; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 6px); border-radius: 999px; background: rgba(255, 255, 255, 0.16); transition: transform 0.4s var(--spring); }
 .segment[data-on="mine"]::before { transform: translateX(calc(100% + 4px)); }
-.donut { position: relative; width: 220px; margin: 20px auto; }
-.donut svg { display: block; width: 100%; }
+.donut { position: relative; height: 280px; margin: 8px 0 16px; }
+.donut svg { display: block; width: 202px; height: 202px; position: absolute; left: calc(50% - 101px); top: 39px; }
+.donut-label { position: absolute; display: flex; flex-direction: column; gap: 1px; transform: translateY(-50%); padding: 4px 0; animation: fade 0.5s 0.3s backwards; }
+.donut-label.right { left: calc(50% + 113px); align-items: flex-start; }
+.donut-label.left { right: calc(50% + 113px); align-items: flex-end; }
+.donut-label:active:not(:disabled) { transform: translateY(-50%) scale(0.96); }
+.donut-label .name { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: var(--secondary); white-space: nowrap; }
+.donut-label .name i { width: 6px; height: 6px; border-radius: 50%; }
+.donut-label .pct { font-size: 13px; font-weight: 600; color: var(--text); }
 .donut svg circle[style] { animation: draw 0.7s var(--ease) backwards; }
 @keyframes draw { from { stroke-dasharray: 0 999; } }
 .donut .center { animation: fade 0.5s 0.15s backwards; }
-.donut .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.donut .center { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .donut .value { font-size: 28px; font-weight: 600; }
 .donut .label { font-size: 13px; color: var(--secondary); margin-top: 2px; }
 .row .count { font-size: 13px; color: var(--secondary); margin-left: 6px; }
@@ -485,6 +499,13 @@ button.form-row, .date-button, .split-chip { padding-left: 0; padding-right: 0; 
 .action-row .chevron .glyph { width: 14px; height: 14px; }
 .round-icon { width: 36px; height: 36px; border-radius: 10px; color: var(--tint); background: color-mix(in srgb, var(--tint) 12%, transparent); }
 .round-icon .glyph { width: 17px; height: 17px; }
+/* The ledger sheet as in the app: no dot by its title, 完成 on a capsule,
+   and the icons a firmer orange */
+.sheet.ledgers .sheet-head h2::before { content: none; }
+.sheet.ledgers .sheet-head .text-button { min-height: 40px; padding: 0 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--text); font-weight: 600; }
+.sheet.ledgers .rows .row .round-icon { width: 40px; height: 40px; border-radius: 11px; background: color-mix(in srgb, var(--tint) 20%, transparent); }
+.sheet.ledgers .round-icon .glyph { width: 20px; height: 20px; }
+.sheet.ledgers .card { background: rgba(255, 255, 255, 0.07); }
 .action-row.danger > .glyph { color: var(--negative); }
 .action-row.danger { color: var(--negative); }
 .sheet:not(.entry) .card .field { padding: 0 16px; border-bottom: 0; }
@@ -530,7 +551,6 @@ button.currency-pill .glyph { width: 11px; height: 11px; }
 .changes-tile .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The note at the bottom while a month's end is pulled past */
-.month-pull { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 96px); text-align: center;
-  font-size: 13px; color: var(--secondary); opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.15s; }
+.month-pull { position: fixed; left: 0; right: 0; top: 0; text-align: center;
+  font-size: 13px; color: var(--secondary); opacity: 0; pointer-events: none; z-index: 6; }
 .month-pull.ready { color: var(--text); }
-.month-pull.top { bottom: auto; top: calc(env(safe-area-inset-top) + 72px); }

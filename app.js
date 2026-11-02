@@ -417,10 +417,19 @@ function tweenFigures() {
   }
 }
 
-// The header gets its frosted background once the page scrolls under it
-addEventListener('scroll', () => {
-  document.body.classList.toggle('scrolled', scrollY > 4);
-}, { passive: true });
+// Once the page scrolls, what goes under the header fades out just below
+// it, like the app's TopEdgeFade: the page's own background drawn over the
+// content and masked, never a frosted material (Julia, 2026-11-02)
+const topFade = Object.assign(document.createElement('div'), { className: 'top-fade' });
+document.body.append(topFade);
+function placeTopFade() {
+  const header = app.querySelector('.sticky');
+  document.documentElement.style.setProperty('--fade-top', `${header ? header.offsetHeight : 0}px`);
+  document.body.classList.toggle('scrolled', !!header && scrollY > 4);
+}
+addEventListener('scroll', placeTopFade, { passive: true });
+addEventListener('resize', placeTopFade);
+new MutationObserver(placeTopFade).observe(app, { childList: true });
 
 // iOS only shows :active press states when the page listens for touches
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -519,8 +528,8 @@ function render() {
     ${state.menuOpen ? `
       <div class="menu" role="menu">
         <div class="who">${escape(state.email ?? '')}</div>
-        <button data-action="refresh">重新整理</button>
-        <button class="danger" data-action="signOut">登出</button>
+        <button data-action="refresh">重新整理${glyph('refresh-cw')}</button>
+        <button class="danger" data-action="signOut">登出${glyph('log-out')}</button>
       </div>` : ''}
 `;
   state.flashId = null;
@@ -597,19 +606,48 @@ function categoryTotals() {
 
 // A thin ring with rounded segments, like the app's donut
 function donut(totals, sum) {
-  const r = 80, length = 2 * Math.PI * r, gap = totals.length > 1 ? 22 : 0;
+  const r = 92, length = 2 * Math.PI * r, gap = totals.length > 1 ? 22 : 0;
   let start = 0;
   // Each arc draws in after the one before it
   const arcs = totals.map((t, i) => {
     const part = (t.cents / sum) * length;
-    const arc = `<circle r="${r}" cx="100" cy="100" fill="none" stroke="${CATEGORIES[t.key]?.color ?? '#8D93A6'}" stroke-width="18"
+    const arc = `<circle r="${r}" cx="101" cy="101" fill="none" stroke="${CATEGORIES[t.key]?.color ?? '#8D93A6'}" stroke-width="18"
       stroke-linecap="round" stroke-dasharray="${Math.max(part - gap, 0.5)} ${length}" stroke-dashoffset="${-(start + gap / 2)}"
-      transform="rotate(-90 100 100)" style="animation-delay:${i * 60}ms"/>`;
+      transform="rotate(-90 101 101)" style="animation-delay:${i * 60}ms"/>`;
     start += part;
     return arc;
   }).join('');
-  return `<svg viewBox="0 0 200 200" aria-hidden="true">
-    <circle r="${r}" cx="100" cy="100" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="18"/>${arcs}</svg>`;
+  return `<svg viewBox="0 0 202 202" aria-hidden="true">
+    <circle r="${r}" cx="101" cy="101" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="18"/>${arcs}</svg>
+    ${donutLabels(totals, sum)}`;
+}
+
+// Each slice's name and share outside the ring, as in the app: in a column
+// on the slice's side at the height of its middle, pushed apart so small
+// neighbouring slices never overlap. The ring is 184px across in a 280px box.
+const DONUT_HEIGHT = 280, DONUT_RADIUS = 92 + 9;
+function donutLabels(totals, sum) {
+  const mid = DONUT_HEIGHT / 2, top = Math.max(mid - DONUT_RADIUS, 18), bottom = Math.min(mid + DONUT_RADIUS, DONUT_HEIGHT - 18);
+  let start = 0;
+  const all = totals.map(t => {
+    const part = t.cents / sum, angle = (start + part / 2) * 2 * Math.PI - Math.PI / 2;
+    start += part;
+    return { t, percent: Math.round(part * 100), right: Math.cos(angle) >= 0, y: mid + Math.sin(angle) * DONUT_RADIUS };
+  });
+  const placed = [];
+  for (const side of [true, false]) {
+    const column = all.filter(l => l.right === side).sort((a, b) => a.y - b.y);
+    column.forEach((l, i) => { l.y = Math.max(l.y, top, i ? column[i - 1].y + 34 : top); });
+    // If pushing ran off the bottom, slide the whole column back up
+    const over = (column.at(-1)?.y ?? 0) - bottom;
+    if (over > 0) { const shift = Math.min(over, column[0].y - 18); column.forEach(l => { l.y -= shift; }); }
+    placed.push(...column);
+  }
+  return placed.map(({ t, percent, right, y }) => {
+    const c = CATEGORIES[t.key] ?? CATEGORIES.other;
+    return `<button class="donut-label ${right ? 'right' : 'left'}" style="top:${y}px" data-action="statsCategory" data-value="${t.key}">
+      <span class="name"><i style="background:${c.color}"></i>${c.title}</span><span class="pct num">${percent}%</span></button>`;
+  }).join('');
 }
 
 function renderStats() {
@@ -823,38 +861,62 @@ function renderChanges() {
 
 // At the end of a month, a firm pull up goes on to the month before (Erik,
 // 2026-11-02), and at the top a firm pull down to the month after (Julia),
-// with a note saying so; a whole ledger has no month to step, and there's
-// none after this one
-const PULL_TO_STEP = 80;
+// on the list and on 共用分類; a whole ledger has no month to step, and
+// there's none after this one. The month's list (not the header or tiles)
+// follows the finger at half speed and the note sits in the gap that opens,
+// as in the app's MonthPull, rather than over the rows (Julia, 2026-11-02).
+const PULL_TO_STEP = 60, PULL_HINT_ROOM = 30;
 let pull = null;
 const pullNote = Object.assign(document.createElement('div'), { className: 'month-pull' });
 document.body.append(pullNote);
 const atEnd = () => scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
 document.addEventListener('touchstart', event => {
-  if (state.status !== 'ready' || state.view !== 'list' || draft || settle || wholeTotals()) return;
-  pull = { y: event.touches[0].clientY, by: 0 };
+  if (state.status !== 'ready' || !['list', 'stats'].includes(state.view) || draft || settle || wholeTotals()) return;
+  const touch = event.touches[0];
+  pull = { x: touch.clientX, y: touch.clientY, by: 0, gap: 0 };
 }, { passive: true });
-document.addEventListener('touchmove', event => {
-  if (!pull) return;
-  const y = event.touches[0].clientY;
-  // Up past the end steps back a month; down past the top, forward
-  const by = atEnd() && pull.y > y ? -1 : scrollY <= 0 && y > pull.y && state.month < monthKey(today()) ? 1 : 0;
-  if (!by) { pull.y = y; pull.by = 0; pullNote.style.opacity = 0; return; }
-  const past = Math.abs(y - pull.y), ready = past >= PULL_TO_STEP;
-  if ((pull.by !== 0 && pull.ready) !== ready) navigator.vibrate?.(8);
-  Object.assign(pull, { by, ready });
+function pullTo(gap, by) {
+  pull.gap = gap;
+  // A short month already has room below its last row, and moving it up
+  // would slide it over the tiles, so only a page that scrolls moves up
+  const body = app.querySelector('.month-body');
+  const moves = by > 0 || document.documentElement.scrollHeight > innerHeight + 2;
+  if (body) body.style.transform = gap && moves ? `translateY(${by * gap}px)` : '';
+  const ready = gap >= PULL_TO_STEP;
+  if (pull.ready !== undefined && pull.ready !== ready) navigator.vibrate?.(8);
+  pull.ready = ready;
+  if (gap <= PULL_HINT_ROOM / 2) { pullNote.style.opacity = 0; return; }
   const month = Number(shiftMonth(state.month, by).slice(5));
   pullNote.textContent = ready ? `放開看${month}月` : by < 0 ? `繼續往上滑看${month}月` : `繼續往下拉看${month}月`;
   pullNote.classList.toggle('ready', ready);
-  pullNote.classList.toggle('top', by > 0);
-  pullNote.style.opacity = Math.min(1, past / PULL_TO_STEP);
+  // Below the last row, or above the first, in the gap the pull opens
+  const box = body?.getBoundingClientRect();
+  pullNote.style.top = `${box ? (by < 0 ? box.bottom + 10 : box.top - 28) : innerHeight / 2}px`;
+  pullNote.style.opacity = Math.min(1, (gap - PULL_HINT_ROOM / 2) / (PULL_TO_STEP - PULL_HINT_ROOM / 2));
+}
+document.addEventListener('touchmove', event => {
+  if (!pull || edge?.on || openSwipe) return;
+  const touch = event.touches[0], dy = touch.clientY - pull.y;
+  // Sideways is a row swipe or the tiles, not a pull
+  if (!pull.by && Math.abs(touch.clientX - pull.x) > Math.abs(dy)) { pull = null; return; }
+  // Up past the end steps back a month; down past the top, forward
+  const by = pull.by || (atEnd() && dy < 0 ? -1 : scrollY <= 0 && dy > 0 && state.month < monthKey(today()) ? 1 : 0);
+  if (!by || dy * by < 0) { pull.y = touch.clientY; if (pull.by) { pull.by = 0; pullTo(0, 0); } return; }
+  pull.by = by;
+  pullTo(Math.abs(dy) * 0.5, by);
 }, { passive: true });
 document.addEventListener('touchend', () => {
   if (!pull) return;
-  const { by, ready } = pull;
+  const { by, ready, gap } = pull;
   pull = null;
   pullNote.style.opacity = 0;
-  if (by && ready) changeMonth(by);
+  if (!gap) return;
+  if (by && ready) { changeMonth(by); return; }
+  const body = app.querySelector('.month-body');
+  if (!body) return;
+  body.style.transition = 'transform 0.3s var(--ease)';
+  body.style.transform = '';
+  setTimeout(() => { body.style.transition = ''; }, 300);
 });
 
 function dayBlock(day, rows) {
@@ -1783,7 +1845,9 @@ function toast(text, action) {
 // the old month from jumping before it slides out
 function changeMonth(by) {
   if (wholeTotals() || (by > 0 && state.month >= monthKey(today()))) return;
-  animate(by > 0 ? 'month-next' : 'month-prev', () => { state.month = shiftMonth(state.month, by); render(); scrollTo(0, 0); });
+  animate(by > 0 ? 'month-next' : 'month-prev', () => {
+    state.month = shiftMonth(state.month, by); render(); scrollTo(0, 0);
+  });
 }
 
 // 今天: back to this month from any other, like the app's
