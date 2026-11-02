@@ -520,32 +520,38 @@ function render() {
       </div>
       ${isCurrent ? '' : '<button class="today-button" data-action="thisMonth">今天</button>'}`;
   app.innerHTML = `
-    <header class="header sticky">
-      ${head}
-      ${whole ? '<div class="spacer"></div>' : ''}
-      <button class="round" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}</button>
-      <button class="round" data-action="menu" aria-label="帳號" aria-expanded="${state.menuOpen}">${glyph('circle-user')}</button>
-    </header>
+    <div class="sticky month-top">
+      <header class="header">
+        ${head}
+        ${whole ? '<div class="spacer"></div>' : ''}
+        <button class="round" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}</button>
+        <button class="round" data-action="menu" aria-label="帳號" aria-expanded="${state.menuOpen}">${glyph('circle-user')}</button>
+      </header>
 
-    <div class="ledger-row">
-      <button class="ledger-name" data-action="ledgers" aria-label="帳本 ${escape(ledger.name)}，點一下切換">
-        ${glyph(trip ? 'plane' : 'house')}<span>${escape(ledger.name)}</span>${archived ? '<span class="archived">已封存</span>' : ''}${glyph('chevron-down')}
-      </button>
-      <span class="spacer"></span>
-      <button class="scope" data-action="scope" aria-label="${whole ? (trip ? '全程' : '全部') : '本月'}，點一下切換">
-        ${whole ? (trip ? '全程' : '全部') : '本月'}${glyph('chevrons-up-down')}
-      </button>
-    </div>
+      <div class="ledger-row">
+        <button class="ledger-name" data-action="ledgers" aria-label="帳本 ${escape(ledger.name)}，點一下切換">
+          ${glyph(trip ? 'plane' : 'house')}<span>${escape(ledger.name)}</span>${archived ? '<span class="archived">已封存</span>' : ''}${glyph('chevron-down')}
+        </button>
+        <span class="spacer"></span>
+        <button class="scope" data-action="scope" aria-label="${whole ? (trip ? '全程' : '全部') : '本月'}，點一下切換">
+          ${whole ? (trip ? '全程' : '全部') : '本月'}${glyph('chevrons-up-down')}
+        </button>
+      </div>
 
-    <!-- What was spent comes first, in two big figures; the scope beside the
-         ledger's name covers both. Who owes whom and the latest change follow
-         as quiet lines, like the app's -->
-    <section class="month-summary">
+      <!-- What was spent comes first, in two big figures, held under the
+           month with the ledger row and who owes whom; the scope beside the
+           ledger's name covers both totals -->
       <div class="tiles">
         ${figureTile('total', '共用', spending.reduce((s, e) => s + e.amount_cents, 0))}
         ${figureTile('mine', '我的份', spending.reduce((s, e) => s + share(e, state.me), 0))}
       </div>
       ${balanceLine()}
+    </div>
+
+    <!-- The latest change scrolls away with the records, so it doesn't keep
+         the list short; the balance stays with the tiles, like the app's
+         (Julia 2026-11-02) -->
+    <section class="month-summary">
       ${changesLine()}
     </section>
 
