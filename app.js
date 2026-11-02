@@ -518,7 +518,7 @@ function render() {
         <span class="sep"></span>
         <button data-action="nextMonth" aria-label="下個月" ${isCurrent ? 'disabled' : ''}>${glyph('chevron-right')}</button>
       </div>
-      ${isCurrent ? '' : '<button class="today-button" data-action="thisMonth">今天</button>'}`;
+      ${isCurrent ? '' : `<button class="today-button" data-action="thisMonth" aria-label="今天">${glyph('undo-2')}</button>`}`;
   app.innerHTML = `
     <div class="sticky month-top">
       <header class="header">

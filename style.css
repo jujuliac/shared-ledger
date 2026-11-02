@@ -101,14 +101,14 @@ input, textarea { font: inherit; color: var(--text); }
 .header .month, .today-button { white-space: nowrap; }
 .header > :not(.spacer) { flex: none; }
 @media (max-width: 360px) { .header .pill button { width: 36px; } .header { gap: 6px; } }
-/* A past month adds 今天 beside 分類 and the account; on a phone under 400pt the row tightens to fit */
-@media (max-width: 399px) { .header:has(.today-button) { gap: 6px; } .header:has(.today-button) .pill button { width: 38px; } .header .today-button { padding: 0 12px; } }
 .pill { display: flex; align-items: center; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; }
 .pill button { width: 46px; height: 44px; display: grid; place-items: center; color: var(--text-soft); }
 .pill .sep { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.14); }
 .pill button:disabled { opacity: 0.3; }
-.today-button { height: 44px; padding: 0 14px; border-radius: 999px; font-size: 15px; font-weight: 600; color: var(--text);
+/* Back to this month: an icon, like the app's, so the month name keeps its room */
+.today-button { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text);
   background: rgba(255, 138, 61, 0.22); border: 1px solid rgba(255, 138, 61, 0.35); }
+.today-button .glyph { width: 18px; height: 18px; }
 .round { width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); font-size: 16px; }
 
 .card {
