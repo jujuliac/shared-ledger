@@ -875,9 +875,12 @@ function renderChanges() {
 // At the end of a month, a firm pull up goes on to the month before (Erik,
 // 2026-11-02), and at the top a firm pull down to the month after (Julia),
 // on the list and on 共用分類; a whole ledger has no month to step, and
-// there's none after this one. The month's list (not the header or tiles)
-// follows the finger at half speed and the note sits in the gap that opens,
-// as in the app's MonthPull, rather than over the rows (Julia, 2026-11-02).
+// there's none after this one. What's under the header follows the finger
+// at half speed and the note sits in the gap that opens, as in the app's
+// MonthPull, rather than over the rows (Julia, 2026-11-02): pulled up, all
+// of it slides up under the header and fades there, as when scrolling (a
+// month too short to scroll didn't move at all, which hid the pull);
+// pulled down, the list alone moves away from the tiles.
 const PULL_TO_STEP = 60, PULL_HINT_ROOM = 30;
 let pull = null;
 const pullNote = Object.assign(document.createElement('div'), { className: 'month-pull' });
@@ -890,11 +893,9 @@ document.addEventListener('touchstart', event => {
 }, { passive: true });
 function pullTo(gap, by) {
   pull.gap = gap;
-  // A short month already has room below its last row, and moving it up
-  // would slide it over the tiles, so only a page that scrolls moves up
   const body = app.querySelector('.month-body');
-  const moves = by > 0 || document.documentElement.scrollHeight > innerHeight + 2;
-  if (body) body.style.transform = gap && moves ? `translateY(${by * gap}px)` : '';
+  for (const el of pulled(by)) el.style.transform = gap ? `translateY(${by * gap}px)` : '';
+  document.body.classList.toggle('pulling', gap > 0 && by < 0);
   const ready = gap >= PULL_TO_STEP;
   if (pull.ready !== undefined && pull.ready !== ready) navigator.vibrate?.(8);
   pull.ready = ready;
@@ -907,6 +908,7 @@ function pullTo(gap, by) {
   pullNote.style.top = `${box ? (by < 0 ? box.bottom + 10 : box.top - 28) : innerHeight / 2}px`;
   pullNote.style.opacity = Math.min(1, (gap - PULL_HINT_ROOM / 2) / (PULL_TO_STEP - PULL_HINT_ROOM / 2));
 }
+const pulled = by => (by < 0 ? app.querySelectorAll(':scope > :not(.sticky):not(.fab):not(.menu)') : app.querySelectorAll('.month-body'));
 document.addEventListener('touchmove', event => {
   if (!pull || edge?.on || openSwipe) return;
   const touch = event.touches[0], dy = touch.clientY - pull.y;
@@ -914,7 +916,7 @@ document.addEventListener('touchmove', event => {
   if (!pull.by && Math.abs(touch.clientX - pull.x) > Math.abs(dy)) { pull = null; return; }
   // Up past the end steps back a month; down past the top, forward
   const by = pull.by || (atEnd() && dy < 0 ? -1 : scrollY <= 0 && dy > 0 && state.month < monthKey(today()) ? 1 : 0);
-  if (!by || dy * by < 0) { pull.y = touch.clientY; if (pull.by) { pull.by = 0; pullTo(0, 0); } return; }
+  if (!by || dy * by < 0) { pull.y = touch.clientY; if (pull.by) { pullTo(0, pull.by); pull.by = 0; } return; }
   pull.by = by;
   pullTo(Math.abs(dy) * 0.5, by);
 }, { passive: true });
@@ -924,12 +926,13 @@ document.addEventListener('touchend', () => {
   pull = null;
   pullNote.style.opacity = 0;
   if (!gap) return;
-  if (by && ready) { changeMonth(by); return; }
-  const body = app.querySelector('.month-body');
-  if (!body) return;
-  body.style.transition = 'transform 0.3s var(--ease)';
-  body.style.transform = '';
-  setTimeout(() => { body.style.transition = ''; }, 300);
+  if (by && ready) { document.body.classList.remove('pulling'); changeMonth(by); return; }
+  const moved = [...pulled(by)];
+  for (const el of moved) { el.style.transition = 'transform 0.3s var(--ease)'; el.style.transform = ''; }
+  setTimeout(() => {
+    document.body.classList.remove('pulling');
+    for (const el of moved) el.style.transition = '';
+  }, 300);
 });
 
 function dayBlock(day, rows) {

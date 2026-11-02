@@ -74,7 +74,7 @@ body.sheet-open { overflow: hidden; }
   mask: linear-gradient(#000 var(--fade-top, 0px), transparent calc(var(--fade-top, 0px) + 36px));
 }
 .top-fade::before { content: ""; position: absolute; inset: 0; background: var(--screen-light); }
-body.scrolled .top-fade { opacity: 1; }
+body.scrolled .top-fade, body.pulling .top-fade { opacity: 1; }
 html { overscroll-behavior-y: none; }
 
 /* Press feedback: things shrink a touch under the finger and spring back */
@@ -430,6 +430,12 @@ html[data-motion="pop"]::view-transition-old(root) { animation-name: to-right; z
 
 html[data-motion^="month"] .month-body { view-transition-name: month-body; }
 html[data-motion^="month"] .header .month { view-transition-name: month-label; }
+/* After a pull up, the ledger row and tiles glide back into place instead of jumping */
+html[data-motion^="month"] .ledger-row { view-transition-name: month-ledger; }
+html[data-motion^="month"] .tiles { view-transition-name: month-tiles; }
+::view-transition-group(month-ledger), ::view-transition-group(month-tiles) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
+::view-transition-old(month-ledger), ::view-transition-old(month-tiles) { animation: none; opacity: 0; }
+::view-transition-new(month-ledger), ::view-transition-new(month-tiles) { animation: none; }
 html[data-motion^="month"]::view-transition-old(root), html[data-motion^="month"]::view-transition-new(root) { animation: none; }
 ::view-transition-group(month-body), ::view-transition-group(month-label) { animation-duration: 0.32s; animation-timing-function: var(--ease); }
 /* The old month is gone before the new one comes in: crossed, their rows read over each other */
