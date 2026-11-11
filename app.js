@@ -1816,23 +1816,24 @@ function updateSubForm() {
   sheetRoot.querySelector('#saveSub').disabled = !name || !changed;
 }
 
-// Each record is changed on its own, so each shows in 最近更新; the list is
-// read again once at the end rather than after every one
+// Done in one go on the server (only name and category, all or none), then
+// read back; each record still shows in 最近更新
 async function saveSubForm() {
-  const f = subForm, changes = { name: f.newName.trim(), category: f.newCategory };
-  const using = ledgerEntries(state.ledgerId).filter(e => e.kind === 'expense' && e.category === f.category && e.name === f.name);
-  let failed = false;
+  const f = subForm, name = f.newName.trim();
   try {
-    for (const e of using) {
-      if (sample) { await saveRow({ id: e.id, ...changes }, false); continue; }
-      const { data, error } = await db.from('shared_entries').update(changes).eq('id', e.id).select();
-      if (error || !data?.length) throw error ?? new Error('not saved');
+    if (sample) {
+      const using = ledgerEntries(state.ledgerId).filter(e => e.kind === 'expense' && e.category === f.category && e.name === f.name);
+      for (const e of using) await saveRow({ id: e.id, name, category: f.newCategory }, false);
+    } else {
+      const { error } = await db.rpc('rename_shared_subcategory', {
+        p_ledger: state.ledgerId, p_category: f.category, p_name: f.name, p_new_name: name, p_new_category: f.newCategory,
+      });
+      if (error) throw error;
+      await loadEntries();
     }
-  } catch { failed = true; }
-  if (!sample) await loadEntries().catch(() => {});
+  } catch { toast('連不上共用帳，請確認網路後再試一次'); return; }
   pickLedger();
   render();
-  if (failed) { toast('連不上共用帳，請確認網路後再試一次'); openSubcategories(); return; }
   openSubcategories();
   toast('已儲存');
 }
