@@ -1658,6 +1658,7 @@ function openLedgers() {
       <div class="card rows">
         <button class="row action-row" data-action="newTrip">${roundIcon('plane', 'var(--text-soft)')}<span class="main">新增旅遊帳</span><span class="chevron">${glyph('chevron-right')}</span></button>
         ${isTrip(current) ? `<button class="row action-row" data-action="tripSettings">${roundIcon('sliders-horizontal', 'var(--text-soft)')}<span class="main">${escape(current.name)} 設定</span><span class="chevron">${glyph('chevron-right')}</span></button>` : ''}
+        <button class="row action-row" data-action="subcategories">${roundIcon('tag', 'var(--text-soft)')}<span class="main">子分類</span><span class="chevron">${glyph('chevron-right')}</span></button>
       </div>
       ${archived.length ? `<div class="section-title">已封存</div><div class="card rows">${archived.map(item).join('')}</div>` : ''}
     </div>`);
@@ -1746,6 +1747,94 @@ async function archiveLedger() {
   const kept = '紀錄都會留著，隨時可以取消封存。';
   if (!l.archived_at && !confirm(`封存「${l.name}」？${balance(l.id) !== 0 ? '這本帳還沒兩清。' : ''}${kept}`)) return;
   await writeLedger({ archived_at: l.archived_at ? null : new Date().toISOString() });
+}
+
+// ---------- 子分類 ----------
+
+// 帳本 → 子分類: the 子分類 this ledger's records use, by category, each
+// opening a form to rename it or move it to another category; a name
+// already there merges with it (SharedSubcategoriesView in the app)
+let subForm = null;
+
+function usedSubcategories(category, ledgerId) {
+  const counts = new Map();
+  for (const e of ledgerEntries(ledgerId)) {
+    if (e.kind === 'expense' && e.category === category && e.name) counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([name, count]) => ({ name, count }));
+}
+
+function openSubcategories() {
+  subForm = null;
+  const ledger = currentLedger();
+  const groups = (isTrip(ledger) ? TRIP_PICKABLE : PICKABLE)
+    .map(key => [key, usedSubcategories(key, ledger.id)]).filter(([, list]) => list.length);
+  const item = (key, s) => `<button class="row action-row" data-action="editSub" data-category="${key}" data-value="${escape(s.name)}">
+      ${categoryIcon(key, 36)}<span class="main">${escape(s.name)}</span><span class="secondary num">${s.count} 筆</span><span class="chevron">${glyph('chevron-right')}</span></button>`;
+  showSheet('ledgers', '子分類', `
+    <div class="sheet-head">
+      <button class="text-button" data-action="ledgers">返回</button>
+      <h2>子分類</h2>
+      <span style="width:44px"></span>
+    </div>
+    <div class="sheet-body">
+      ${groups.length ? groups.map(([key, list]) => `<div class="section-title">${CATEGORIES[key].title}</div>
+        <div class="card rows">${list.map(s => item(key, s)).join('')}</div>`).join('')
+        : '<p class="footnote">這本帳還沒有子分類。</p>'}
+    </div>`);
+}
+
+function openSubForm(category, name) {
+  const count = usedSubcategories(category, state.ledgerId).find(s => s.name === name)?.count ?? 0;
+  subForm = { category, name, count, newName: name, newCategory: category };
+  const keys = isTrip(currentLedger()) ? TRIP_PICKABLE : PICKABLE;
+  showSheet('ledgers', name, `
+    <div class="sheet-head">
+      <button class="text-button" data-action="subcategories">取消</button>
+      <h2>${escape(name)}</h2>
+      <button class="text-button strong" data-action="saveSub" id="saveSub">儲存</button>
+    </div>
+    <div class="sheet-body">
+      <div class="card">
+        <label class="field"><input type="text" placeholder="子分類名稱" value="${escape(name)}" data-sub="newName"></label>
+        <div class="divider"></div>
+        <label class="field"><span class="name">分類</span>
+          <select data-sub="newCategory">${keys.map(k => `<option value="${k}" ${k === category ? 'selected' : ''}>${CATEGORIES[k].title}</option>`).join('')}</select></label>
+      </div>
+      <p class="footnote" id="subNote"></p>
+    </div>`);
+  updateSubForm();
+}
+
+function updateSubForm() {
+  const f = subForm, name = f.newName.trim();
+  const changed = name !== f.name || f.newCategory !== f.category;
+  const merges = changed && usedSubcategories(f.newCategory, state.ledgerId).some(s => s.name === name);
+  sheetRoot.querySelector('#subNote').textContent = merges
+    ? `會改掉 ${f.count} 筆紀錄，併入「${CATEGORIES[f.newCategory].title} › ${name}」。`
+    : `會改掉 ${f.count} 筆紀錄，${partnerName()} 會在最近更新看到。`;
+  sheetRoot.querySelector('#saveSub').disabled = !name || !changed;
+}
+
+// Each record is changed on its own, so each shows in 最近更新; the list is
+// read again once at the end rather than after every one
+async function saveSubForm() {
+  const f = subForm, changes = { name: f.newName.trim(), category: f.newCategory };
+  const using = ledgerEntries(state.ledgerId).filter(e => e.kind === 'expense' && e.category === f.category && e.name === f.name);
+  let failed = false;
+  try {
+    for (const e of using) {
+      if (sample) { await saveRow({ id: e.id, ...changes }, false); continue; }
+      const { data, error } = await db.from('shared_entries').update(changes).eq('id', e.id).select();
+      if (error || !data?.length) throw error ?? new Error('not saved');
+    }
+  } catch { failed = true; }
+  if (!sample) await loadEntries().catch(() => {});
+  pickLedger();
+  render();
+  if (failed) { toast('連不上共用帳，請確認網路後再試一次'); openSubcategories(); return; }
+  openSubcategories();
+  toast('已儲存');
 }
 
 // ---------- Settle sheet ----------
@@ -1932,6 +2021,9 @@ document.addEventListener('click', async event => {
     case 'tripSettings': openLedgerForm(currentLedger()); break;
     case 'saveLedger': await saveLedgerForm(); break;
     case 'archiveLedger': await archiveLedger(); break;
+    case 'subcategories': openSubcategories(); break;
+    case 'editSub': openSubForm(target.dataset.category, target.dataset.value); break;
+    case 'saveSub': await saveSubForm(); break;
     case 'scope': {
       const whole = wholeTotals();
       state.whole = !whole;
@@ -2011,6 +2103,7 @@ document.addEventListener('click', async event => {
 document.addEventListener('input', event => {
   const field = event.target.dataset.field, settleField = event.target.dataset.settle;
   const ledgerField = event.target.dataset.ledger;
+  if (event.target.dataset.sub && subForm) { subForm[event.target.dataset.sub] = event.target.value; updateSubForm(); }
   if (ledgerField && ledgerForm) {
     ledgerForm[ledgerField] = event.target.value;
     if (ledgerField === 'currency') renderLedgerForm(); else updateLedgerForm();
