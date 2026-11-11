@@ -291,6 +291,8 @@ button.form-row:active:not(:disabled) { transform: none; opacity: 0.7; }
 .form-row .picked .icon .glyph { width: 14px; height: 14px; }
 .form-row .scroll-chips { margin-right: calc(-1 * var(--gutter)); padding-right: var(--gutter); }
 .chip.plus { width: 34px; padding: 0; }
+/* 更多: the one-off 子分類, outlined like the app */
+.chip.more { background: none; border-color: rgba(255, 255, 255, 0.12); color: var(--secondary); }
 
 /* The keypad and its button at the bottom; pickers rise in a card instead */
 .bottom-panel { padding: 0 var(--gutter) calc(env(safe-area-inset-bottom) + 8px); }

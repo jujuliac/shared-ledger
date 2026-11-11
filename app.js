@@ -233,20 +233,32 @@ function listNote(e) {
 
 // 子分類 for a category: names used under it before in that ledger, most used
 // first, each with its latest amount when that was in the currency being
-// typed (never NT$ offered as yen), then the usual ones
+// typed (never NT$ offered as yen). Names used twice or more, or first
+// written in the last 7 days, are shown; one-offs wait under 更多. The usual
+// ones are offered only until the category has any record, so a renamed one
+// doesn't come back (like the app)
 function subcategories(category, ledgerId, code) {
-  const counts = new Map(), latest = new Map();
+  const counts = new Map(), latest = new Map(), first = new Map();
   for (const e of ledgerEntries(ledgerId)) {
     if (e.kind !== 'expense' || e.category !== category || !e.name) continue;
     counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
     if (!latest.has(e.name)) latest.set(e.name, e);
+    const written = e.created_at ?? e.date;
+    if (!first.has(e.name) || written < first.get(e.name)) first.set(e.name, written);
   }
   // Ties go by name, like the app, so the chips keep their places
   const byDate = (a, b) => latest.get(b).date.localeCompare(latest.get(a).date);
   const used = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || byDate(a, b) || (a < b ? -1 : a > b ? 1 : 0));
-  const unused = (CATEGORIES[category]?.subs ?? []).filter(n => !counts.has(n));
+  if (!used.length) return { shown: (CATEGORIES[category]?.subs ?? []).map(n => ({ name: n, cents: null })), more: [] };
   const amountOf = n => { const e = latest.get(n); return (e.currency ?? 'TWD') === code ? recordedAmount(e) : null; };
-  return [...used.map(n => ({ name: n, cents: amountOf(n) })), ...unused.map(n => ({ name: n, cents: null }))];
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const isShown = n => counts.get(n) >= 2 || new Date(first.get(n)).toISOString() > weekAgo;
+  // With nothing used twice yet, the one-offs are all there is: shown, not under 更多
+  const shown = used.some(isShown) ? used.filter(isShown) : used;
+  return {
+    shown: shown.map(n => ({ name: n, cents: amountOf(n) })),
+    more: used.filter(n => !shown.includes(n)).map(n => ({ name: n, cents: amountOf(n) })),
+  };
 }
 
 // ---------- Data ----------
@@ -1345,7 +1357,8 @@ function pickerCard() {
 
 function renderEntry() {
   const d = draft;
-  const subs = d.category ? subcategories(d.category, d.ledgerId, draftCode()) : [];
+  const offered = d.category ? subcategories(d.category, d.ledgerId, draftCode()) : { shown: [], more: [] };
+  const subs = [...offered.shown, ...(d.allSubs ? offered.more : [])];
   // An opened record's own 子分類 leads, as in the app; keyed on what it was
   // saved with, so tapping another chip doesn't move the row
   const savedSub = d.saved?.category === d.category ? d.saved?.name : null;
@@ -1414,6 +1427,7 @@ function renderEntry() {
         ${!d.category ? '<span class="tertiary">請先選分類</span>'
           : d.addingSub ? `<input type="text" id="newSub" placeholder="輸入子分類" value="${escape(d.name)}" data-field="name" enterkeyhint="done">`
           : `<div class="scroll-chips">${subs.map(s => `<button class="chip ${s.name === d.name ? 'on' : ''}" data-action="sub" data-value="${escape(s.name)}" data-cents="${s.cents ?? ''}">${escape(s.name)}</button>`).join('')}
+              ${!d.allSubs && offered.more.length ? `<button class="chip more" data-action="moreSubs">更多 ${offered.more.length}</button>` : ''}
               <button class="chip plus" data-action="addSub" aria-label="新增子分類">＋</button></div>`}
       </div>
       <div class="divider"></div>
@@ -2074,7 +2088,7 @@ document.addEventListener('click', async event => {
     }
     case 'category':
       // Another category's 子分類 doesn't carry over
-      if (draft.category !== target.dataset.value) draft.name = '';
+      if (draft.category !== target.dataset.value) { draft.name = ''; draft.allSubs = false; }
       draft.category = target.dataset.value;
       show(missing() ?? 'done');
       break;
@@ -2090,6 +2104,7 @@ document.addEventListener('click', async event => {
       renderEntry();
       break;
     }
+    case 'moreSubs': draft.allSubs = true; renderEntry(); break;
     case 'addSub': draft.name = ''; draft.addingSub = true; renderEntry(); break;
     case 'delete': {
       const id = draft?.id ?? settle?.id;
