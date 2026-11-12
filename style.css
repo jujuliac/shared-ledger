@@ -100,7 +100,14 @@ input, textarea { font: inherit; color: var(--text); }
 /* Nothing in the header wraps; on a narrow phone the arrows tighten instead */
 .header .month, .today-button { white-space: nowrap; }
 .header > :not(.spacer) { flex: none; }
-@media (max-width: 360px) { .header .pill button { width: 36px; } .header { gap: 6px; } }
+/* Narrow phones: with 今天, search, 分類 and the account all beside a past
+   month, everything steps down a little so the row still fits on a phone */
+@media (max-width: 440px) {
+  .header { gap: 6px; }
+  .header .pill button { width: 38px; }
+  .header .round, .header .today-button { width: 40px; height: 40px; }
+  .header .month { font-size: 32px; }
+}
 .pill { display: flex; align-items: center; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; }
 .pill button { width: 46px; height: 44px; display: grid; place-items: center; color: var(--text-soft); }
 .pill .sep { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.14); }
@@ -291,6 +298,9 @@ button.form-row:active:not(:disabled) { transform: none; opacity: 0.7; }
 .form-row .picked .icon .glyph { width: 14px; height: 14px; }
 .form-row .scroll-chips { margin-right: calc(-1 * var(--gutter)); padding-right: var(--gutter); }
 .chip.plus { width: 34px; padding: 0; }
+/* Search under the month, like the app's field */
+.search-field { display: block; width: 100%; margin: 12px 0 0; height: 44px; padding: 0 14px; border-radius: 14px; border: none; background: rgba(255, 255, 255, 0.07); color: var(--text); font-size: 16px; }
+.search-field::placeholder { color: var(--tertiary); }
 /* 更多: the one-off 子分類, outlined like the app */
 .chip.more { background: none; border-color: rgba(255, 255, 255, 0.12); color: var(--secondary); }
 

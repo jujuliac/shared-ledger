@@ -515,8 +515,7 @@ function render() {
   const spending = monthEntries.filter(e => e.kind === 'expense');
   const archived = !!ledger.archived_at;
 
-  const days = new Map();
-  for (const e of monthEntries) { if (!days.has(e.date)) days.set(e.date, []); days.get(e.date).push(e); }
+  const searched = !!searchText();
 
   // The days the ledger covers in place of the month, when whole
   const head = whole ? wholeTitle() : `
@@ -536,9 +535,11 @@ function render() {
       <header class="header">
         ${head}
         ${whole ? '<div class="spacer"></div>' : ''}
+        <button class="round" data-action="search" aria-label="${state.searching ? '關閉搜尋' : '搜尋'}">${glyph(state.searching ? 'x' : 'search')}</button>
         <button class="round" data-action="stats" aria-label="共用分類">${glyph('chart-pie')}</button>
         <button class="round" data-action="menu" aria-label="帳號" aria-expanded="${state.menuOpen}">${glyph('circle-user')}</button>
       </header>
+      ${state.searching ? `<input type="search" class="search-field" id="search" placeholder="搜尋子分類、備註或分類" value="${escape(state.query)}" enterkeyhint="search">` : ''}
 
       <div class="ledger-row">
         <button class="ledger-name" data-action="ledgers" aria-label="帳本 ${escape(ledger.name)}，點一下切換">
@@ -563,16 +564,11 @@ function render() {
     <!-- The latest change scrolls away with the records, so it doesn't keep
          the list short; the balance stays with the tiles, like the app's
          (Julia 2026-11-02) -->
-    <section class="month-summary">
+    <section class="month-summary" ${searched ? 'hidden' : ''}>
       ${changesLine()}
     </section>
 
-    <div class="month-body">
-      ${installHint()}
-      ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
-      ${days.size === 0 ? `<p class="empty">${whole ? '還沒有共用支出' : '這個月還沒有共用支出'}</p>` : ''}
-      ${[...days.entries()].map(([day, rows]) => dayBlock(day, rows)).join('')}
-    </div>
+    <div class="month-body">${monthBody(whole, monthEntries)}</div>
 
     <button class="fab ${archived ? 'blocked' : ''}" data-action="add" aria-label="${archived ? '已封存的帳本不能新增' : '新增共用支出'}">${glyph('plus')}</button>
     ${state.menuOpen ? `
@@ -961,6 +957,33 @@ document.addEventListener('touchend', () => {
     for (const el of moved) el.style.transition = '';
   }, 300);
 });
+
+// Search, as in the app: the whole ledger's 子分類, notes as the list
+// shows them, and categories, not just the month on screen
+const searchText = () => (state.searching ? state.query.trim().toLowerCase() : '');
+
+function monthBody(whole, monthEntries) {
+  const text = searchText();
+  const listed = text
+    ? state.entries.filter(e => [e.name, listNote(e), CATEGORIES[e.category]?.title].some(v => v?.toLowerCase().includes(text)))
+    : monthEntries;
+  const days = new Map();
+  for (const e of listed) { if (!days.has(e.date)) days.set(e.date, []); days.get(e.date).push(e); }
+  return `
+      ${installHint()}
+      ${state.offline ? '<p class="notice">沒有連上網路，顯示的是上次的資料</p>' : ''}
+      ${days.size === 0 ? `<p class="empty">${text ? '找不到符合的記錄' : whole ? '還沒有共用支出' : '這個月還沒有共用支出'}</p>` : ''}
+      ${[...days.entries()].map(([day, rows]) => dayBlock(day, rows)).join('')}`;
+}
+
+// Typing redraws only the list, so the field keeps its focus and a
+// Chinese input method isn't cut off mid-word
+function updateSearch() {
+  const whole = wholeTotals();
+  const monthEntries = whole ? state.entries : state.entries.filter(e => e.date.startsWith(state.month));
+  app.querySelector('.month-body').innerHTML = monthBody(whole, monthEntries);
+  app.querySelector('.month-summary').hidden = !!searchText();
+}
 
 function dayBlock(day, rows) {
   const { word, short } = dayLabel(day);
@@ -2056,6 +2079,12 @@ document.addEventListener('click', async event => {
       break;
     case 'payment': choosePayment(target.dataset.value); renderEntry(); break;
     case 'twdConfirm': draft.twdConfirmed = !draft.twdConfirmed; updateAmount(); break;
+    case 'search':
+      state.searching = !state.searching;
+      state.query = '';
+      render();
+      if (state.searching) app.querySelector('#search')?.focus();
+      break;
     case 'stats': state.basis = 'total'; go('stats'); break;
     case 'basis': state.basis = target.dataset.value; render(); break;
     case 'statsCategory': state.statsCategory = target.dataset.value; go('category'); break;
@@ -2117,6 +2146,11 @@ document.addEventListener('click', async event => {
 });
 
 document.addEventListener('input', event => {
+  if (event.target.id === 'search') {
+    state.query = event.target.value;
+    if (!event.isComposing) updateSearch();
+    return;
+  }
   const field = event.target.dataset.field, settleField = event.target.dataset.settle;
   const ledgerField = event.target.dataset.ledger;
   if (event.target.dataset.sub && subForm) { subForm[event.target.dataset.sub] = event.target.value; updateSubForm(); }
@@ -2135,6 +2169,11 @@ document.addEventListener('input', event => {
   }
   if (field && draft) { draft[field] = event.target.value; updateAmount(); }
   if (settleField && settle) { settle[settleField] = event.target.value; updateSettleSummary(); }
+});
+
+// A Chinese input method's word is searched once it's picked
+document.addEventListener('compositionend', event => {
+  if (event.target.id === 'search') { state.query = event.target.value; updateSearch(); }
 });
 
 document.addEventListener('keydown', event => {
