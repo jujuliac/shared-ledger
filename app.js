@@ -14,7 +14,9 @@ const HOUSEHOLD_FALLBACK = { id: HOUSEHOLD, name: '共同生活費', purpose: 'h
 // trip's cash rate and final; card and Suica are guesses until the bill
 const PAYMENTS = { card: { title: '刷卡', icon: 'credit-card' }, cash: { title: '現金', icon: 'banknote' }, suica: { title: 'Suica', icon: 'nfc' } };
 const TRIP_CURRENCIES = ['JPY', 'KRW', 'USD', 'EUR', 'THB', 'HKD'];
-const TIME_ZONE = 'Asia/Taipei';
+// Days follow wherever the phone is, as in the app: in Japan a 00:30 record
+// is that day's, not Taipei's day before (Julia, 2026-11-20)
+const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const sample = new URLSearchParams(location.search).has('sample');
 const db = sample ? null : createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
